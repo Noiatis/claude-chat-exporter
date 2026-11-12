@@ -1,0 +1,48 @@
+name: Release
+# Trigger: git tag v2.2.0 && git push --tags   (tag must match package.json version)
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      HAS_CWS: ${{ secrets.CWS_REFRESH_TOKEN != '' }}
+      HAS_AMO: ${{ secrets.AMO_JWT_ISSUER != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm test
+      - name: Check tag matches version
+        run: test "v$(node -p "require('./package.json').version")" = "${GITHUB_REF_NAME}"
+      - run: npm run build
+      - run: npm run lint:firefox
+
+      - name: GitHub Release (attach both zips)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
+
+      # ---- optional: publish to Chrome Web Store (needs the 4 CWS_* secrets; first version must be created manually in the dashboard) ----
+      - name: Upload to Chrome Web Store
+        if: env.HAS_CWS == 'true'
+        env:
+          EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+        run: npx --yes chrome-webstore-upload-cli@3 upload --source dist/claude-chat-exporter-chrome-$(node -p "require('./package.json').version").zip --auto-publish
+
+      # ---- optional: submit to Firefox AMO (needs AMO_* secrets; first version must be submitted manually) ----
+      - name: Submit to Firefox AMO
+        if: env.HAS_AMO == 'true'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: npx web-ext sign --source-dir dist/firefox --channel listed --artifacts-dir web-ext-artifacts
