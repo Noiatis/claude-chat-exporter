@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>Claude Chat Exporter</title>
+<style>
+  @font-face{font-family:"Ahang";src:url("fonts/Ahang-Regular.woff2") format("woff2");font-weight:400;font-display:swap}
+  @font-face{font-family:"Ahang";src:url("fonts/Ahang-DemiBold.woff2") format("woff2");font-weight:600;font-display:swap}
+  :root{--bg:#fff;--soft:#f4f2ee;--fg:#1b1917;--mut:#5c574f;--line:#e3dfd8;--ctl:#85807a;--accT:#b23a06;--acc:#e8590c;--err:#b3261e}
+  @media (prefers-color-scheme:dark){:root{--bg:#1d1b19;--soft:#2a2724;--fg:#f0ede8;--mut:#b5b0a8;--line:#3a3632;--ctl:#7a756d;--accT:#ff8a3d;--acc:#ff8a3d;--err:#ff8a80}}
+  *{box-sizing:border-box}
+  body{width:340px;max-height:600px;display:flex;flex-direction:column;margin:0;font:400 13px/1.7 "Ahang",Tahoma,system-ui,sans-serif;color:var(--fg);background:var(--bg)}
+  header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  header b{display:block;font-size:15px;font-weight:600;line-height:1.3}
+  header small{color:var(--mut);font-size:12px}
+  main{padding:8px 16px 14px;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
+  header,footer,.act{flex:none}
+  .act{padding:12px 16px 4px;border-bottom:1px solid var(--line)}
+  #trk{margin-top:10px}
+  #st:empty{display:none}
+  h2{margin:14px 0 4px;color:var(--mut);font-size:12px;font-weight:600}
+  .sw{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:32px;cursor:pointer}
+  .sw input{position:absolute;opacity:0;pointer-events:none}
+  .sw i{width:34px;height:20px;border-radius:20px;border:1.5px solid var(--ctl);position:relative;flex:none}
+  .sw i::after{content:"";position:absolute;top:2px;right:2px;width:13px;height:13px;border-radius:50%;background:var(--ctl)}
+  .sw input:checked + i{background:var(--acc);border-color:var(--acc)}
+  .sw input:checked + i::after{background:#1b1917;transform:translateX(-14px)}
+  .sw input:focus-visible + i,select:focus-visible,#go:focus-visible,#all:focus-visible,a:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px}
+  select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--ctl);border-radius:6px;padding:3px 6px;min-height:28px}
+  #go{width:100%;min-height:40px;margin-top:0;border:0;border-radius:6px;background:var(--fg);color:var(--bg);font:600 14px "Ahang",Tahoma,sans-serif;cursor:pointer}
+  #go:disabled{opacity:.55;cursor:default}
+  #all{width:100%;min-height:40px;margin-top:8px;border:1px solid var(--ctl);border-radius:6px;background:var(--bg);color:var(--fg);font:600 14px "Ahang",Tahoma,sans-serif;cursor:pointer}
+  #all:hover{background:var(--soft)}
+  #trk{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:12px;display:none}
+  #bar{height:100%;width:0;background:var(--acc)}
+  #st{margin-top:8px;font-size:12px;color:var(--mut);min-height:18px;word-break:break-word;white-space:pre-line}
+  #st.err{color:var(--err)}
+  .tip{margin-top:6px;font-size:12px;color:var(--mut)}
+  footer{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px;border-top:1px solid var(--line);color:var(--mut);font-size:12px}
+  footer .by{display:flex;align-items:center;gap:7px}
+  footer a{color:var(--accT);text-decoration:underline}
+  footer .n{font-weight:600;color:var(--fg)}
+  @media (prefers-reduced-motion:no-preference){.sw i::after{transition:transform .12s}}
+</style>
+</head>
+<body>
+  <header><span id="hmark"></span><div><b>Claude Chat Exporter</b><small id="sub"></small></div></header>
+  <section class="act">
+    <button id="go">دانلود ZIP از چت فعلی</button>
+    <button id="all">پشتیبان‌گیری از همه‌ی چت‌ها…</button>
+    <div id="trk"><div id="bar"></div></div>
+    <div id="st" role="status" aria-live="polite"></div>
+  </section>
+  <main>
+    <h2>خروجی‌ها</h2>
+    <label class="sw"><span>بسته‌ی انتقال به اکانت دیگر</span><input type="checkbox" id="transfer"><i></i></label>
+    <label class="sw"><span>مرورگر آفلاین HTML (چاپ/PDF)</span><input type="checkbox" id="viewer"><i></i></label>
+    <label class="sw"><span>فرمت Obsidian / Notion (.md)</span><input type="checkbox" id="note"><i></i></label>
+    <label class="sw"><span>درخواست «خلاصه‌ی پروژه» از Claude</span><input type="checkbox" id="aiSummary"><i></i></label>
+    <label class="sw"><span>فقط پیام‌های جدید از آخرین خروجی</span><input type="checkbox" id="incremental"><i></i></label>
+    <label class="sw"><span>شامل دستورالعمل/فایل‌های Project</span><input type="checkbox" id="project"><i></i></label>
+    <label class="sw"><span>پاک‌سازی کلید و توکن‌ها</span><input type="checkbox" id="redact"><i></i></label>
+    <div class="row"><span>سقف حجم متن انتقال</span>
+      <select id="budget"><option value="60000">۶۰ هزار توکن</option><option value="120000">۱۲۰ هزار توکن</option><option value="170000">۱۷۰ هزار توکن</option></select></div>
+
+    <h2>آرشیو کامل (conversation.md)</h2>
+    <label class="sw"><span>شامل «تفکر»</span><input type="checkbox" id="think"><i></i></label>
+    <label class="sw"><span>شامل جزئیات ابزارها</span><input type="checkbox" id="tools"><i></i></label>
+    <label class="sw"><span>همه‌ی شاخه‌های ویرایش/بازتولید</span><input type="checkbox" id="branches"><i></i></label>
+
+    <h2>پشتیبان‌گیری خودکار (چت‌های جدید/تغییرکرده)</h2>
+    <div class="row"><span>تکرار</span>
+      <select id="sched"><option value="off">خاموش</option><option value="daily">روزانه</option><option value="weekly">هفتگی</option></select></div>
+    <div class="tip" id="last"></div>
+    <div class="tip">فقط وقتی اجرا می‌شود که مرورگر باز و claude.ai وارد شده باشد.</div>
+
+    <div class="tip">ورود به اکانت جدید را هم از دکمه‌ی گرد نویاتیس در گوشه‌ی صفحه‌ی claude.ai انجام می‌دهید.</div>
+  </main>
+  <footer><div class="by"><span id="fmark"></span><span>ساخته‌شده توسط <span class="n" id="fname"></span></span></div><span id="flink"></span></footer>
+  <script src="brand.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

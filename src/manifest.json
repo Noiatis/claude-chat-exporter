@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "Claude Chat Exporter",
+  "version": "2.3.2",
+  "description": "Export Claude chats (single or all) as ZIP with offline viewer, Obsidian notes, and a transfer pack to continue in another account.",
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "permissions": [
+    "downloads",
+    "storage",
+    "alarms",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://claude.ai/*"
+  ],
+  "action": {
+    "default_title": "Claude Chat Exporter",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/16.png",
+      "48": "icons/48.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://claude.ai/*"
+      ],
+      "js": [
+        "render.js",
+        "core.js",
+        "brand.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/logo.png",
+        "fonts/Ahang-Regular.woff2",
+        "fonts/Ahang-DemiBold.woff2"
+      ],
+      "matches": [
+        "https://claude.ai/*"
+      ]
+    }
+  ]
+}
