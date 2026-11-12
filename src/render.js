@@ -79,59 +79,98 @@
     return out.join('\n');
   }
 
-  const brandFooter = (brand) => {
-    if (!brand || !brand.name) return '';
-    const nm = esc(brand.nameFa || brand.name);
-    const u = safeUrl(brand.url);
-    return `<footer class="ft">Claude Chat Exporter · ساخته‌شده توسط ${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${nm}</a>` : `<b>${nm}</b>`}</footer>`;
-  };
-
-  // نام فایل و وزن فونت‌ها؛ content.js و core.js هم از همین فهرست می‌خوانند
+  // نام و وزن فونت‌ها و فایل لوگو؛ content.js و core.js هم از همین‌جا می‌خوانند
   const FONT_FILES = [['Ahang-Regular.woff2', 400], ['Ahang-DemiBold.woff2', 600]];
+  const LOGO_FILE = 'logo.png';
 
-  // فونت همراه خروجی می‌آید تا فایل بدون اینترنت هم همان شکل را داشته باشد.
-  // اگر مسیر فونت داده نشود، Tahoma و فونت سیستم جایگزین می‌شوند.
-  const BASE_CSS = (fontBase) => `
-${fontBase ? FONT_FILES.map(([f, w]) => `@font-face{font-family:"Ahang";src:url("${fontBase}${f}") format("woff2");font-weight:${w};font-display:swap}`).join('\n') : ''}
-:root{color-scheme:light;--bg:#fff;--soft:#f4f2ee;--fg:#1b1917;--mut:#5c574f;--line:#e3dfd8;--ctl:#85807a;--accT:#b23a06;--acc:#e8590c;--code:#1b1917;--codefg:#f0ede8}
-:root.dark{color-scheme:dark;--bg:#1d1b19;--soft:#2a2724;--fg:#f0ede8;--mut:#b5b0a8;--line:#3a3632;--ctl:#7a756d;--accT:#ff8a3d;--acc:#ff8a3d;--code:#141312;--codefg:#f0ede8}
+  // لوگو کنار فونت در assets/ می‌نشیند؛ بدون assetBase صفحه با Tahoma و بدون لوگو ساخته می‌شود
+  const logoImg = (assetBase, size) =>
+    assetBase ? `<span class="mk" style="width:${size}px;height:${size}px"><img src="${esc(assetBase + LOGO_FILE)}" alt="" width="${size}" height="${size}"></span>` : '';
+
+  const brandName = (brand) => esc((brand && (brand.nameFa || brand.name)) || '');
+  const brandLink = (brand, inner) => {
+    const u = brand && safeUrl(brand.url);
+    return u ? `<a class="brand" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${inner}</a>` : `<span class="brand">${inner}</span>`;
+  };
+  const brandFooter = (brand, assetBase) => {
+    if (!brand || !brand.name) return '';
+    return `<footer class="ft">${brandLink(brand, `${logoImg(assetBase, 22)}<span>${brandName(brand)}</span>`)}<span>خروجی افزونه‌ی Claude Chat Exporter</span></footer>`;
+  };
+  // نوار بالای صفحه: لوگو و نام تیم در یک سمت، ابزارها در سمت دیگر
+  const masthead = (brand, assetBase, tools) =>
+    `<header class="mast"><div class="in">${brand && brand.name ? brandLink(brand, `${logoImg(assetBase, 30)}<span>${brandName(brand)}</span>`) : ''}<span class="sp"></span>${tools}</div></header>`;
+
+  const BASE_CSS = (assetBase) => `
+${assetBase ? FONT_FILES.map(([f, w]) => `@font-face{font-family:"Ahang";src:url("${assetBase}${f}") format("woff2");font-weight:${w};font-display:swap}`).join('\n') : ''}
+:root{color-scheme:light;--bg:#fff;--soft:#f4f2ee;--fg:#1b1917;--mut:#5c574f;--line:#e3dfd8;--ctl:#85807a;--accT:#b23a06;--acc:#e8590c;--code:#1b1917;--codefg:#f0ede8;--ink:#1b1917}
+:root.dark{color-scheme:dark;--bg:#1d1b19;--soft:#2a2724;--fg:#f0ede8;--mut:#b5b0a8;--line:#3a3632;--ctl:#7a756d;--accT:#ff8a3d;--acc:#ff8a3d;--code:#141312;--codefg:#f0ede8;--ink:#141312}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:400 15px/1.9 "Ahang",Tahoma,system-ui,sans-serif}
 a{color:var(--accT);text-underline-offset:2px}
 :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-.wrap{max-width:760px;margin:0 auto;padding:16px 16px 64px}
-.top{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:8px 16px}
-.top .in{max-width:760px;margin:0 auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.top input[type=search]{flex:1;min-width:160px;min-height:34px;padding:4px 10px;border:1px solid var(--ctl);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
-.top label{font-size:13px;color:var(--mut);display:flex;gap:5px;align-items:center;white-space:nowrap}
-.top button{min-height:34px;border:1px solid var(--ctl);background:var(--bg);color:var(--fg);border-radius:6px;padding:2px 12px;cursor:pointer;font:inherit;font-size:13px}
-.top button:hover{background:var(--soft)}
-h1.title{font-size:24px;line-height:1.5;font-weight:600;margin:24px 0 6px}
-.meta{color:var(--mut);font-size:13px;display:flex;flex-wrap:wrap;gap:2px 16px;margin-bottom:12px;padding-bottom:14px;border-bottom:1px solid var(--line)}
-.msg{padding:14px 0;border-bottom:1px solid var(--line)}
-.msg.Human{background:var(--soft);border-radius:6px;border-bottom:0;padding:12px 14px;margin:14px 0}
-.hd{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;color:var(--mut)}
-.who{font-weight:600;color:var(--fg)}
-.bd{overflow-wrap:anywhere}
+.mast{position:sticky;top:0;z-index:5;background:var(--ink);color:#f0ede8;border-bottom:2px solid var(--acc)}
+.mast .in{max-width:940px;margin:0 auto;padding:8px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.mast .sp{flex:1}
+.brand{display:inline-flex;align-items:center;gap:8px;color:inherit;text-decoration:none;font-weight:600}
+.brand:hover span:last-child{text-decoration:underline}
+.mk{display:inline-flex;flex:none;padding:7%;background:#fff;border-radius:22%;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12)}
+.mk img{width:100%;height:100%;object-fit:contain;display:block}
+.mast input[type=search]{flex:1 1 200px;max-width:340px;min-height:34px;padding:2px 10px;border:1px solid #6d675f;border-radius:6px;background:#2a2724;color:#f0ede8;font:inherit;font-size:14px}
+.mast input::placeholder{color:#b5b0a8}
+.mast label{font-size:13px;color:#d8d3cb;display:flex;gap:5px;align-items:center;white-space:nowrap}
+.mast button,.mast select{min-height:34px;border:1px solid #6d675f;background:transparent;color:#f0ede8;border-radius:6px;padding:2px 12px;cursor:pointer;font:inherit;font-size:13px}
+.mast select option{color:#1b1917}
+.mast button:hover{background:#2a2724}
+.wrap{max-width:940px;margin:0 auto;padding:8px 16px 64px}
+.hero{padding:28px 0 18px;border-bottom:1px solid var(--line)}
+h1.title{font-size:28px;line-height:1.5;font-weight:600;margin:0 0 8px}
+.meta{margin:0;color:var(--mut);font-size:13px;display:flex;flex-wrap:wrap;gap:2px 20px}
+.meta b{font-weight:600;color:var(--fg)}
+.msg{display:grid;grid-template-columns:104px minmax(0,1fr);gap:4px 20px;padding:18px 0;border-bottom:1px solid var(--line)}
+.hd{font-size:12.5px;color:var(--mut);line-height:1.7}
+.who{display:flex;align-items:center;gap:7px;font-weight:600;color:var(--fg);font-size:13.5px}
+.who::before{content:"";width:9px;height:9px;border-radius:2px;border:2px solid var(--fg)}
+.msg.Claude .who::before{background:var(--acc);border-color:var(--acc)}
+.hd a{color:inherit;text-decoration:none} .hd a:hover{text-decoration:underline}
+.bd{overflow-wrap:anywhere;min-width:0}
+.msg.Human .bd{background:var(--soft);border-radius:6px;padding:2px 16px}
 .bd p{margin:.6em 0} .bd img{max-width:100%;border-radius:6px}
+.bd h1,.bd h2,.bd h3{line-height:1.5;font-weight:600}
 pre{background:var(--code);color:var(--codefg);padding:12px 14px;border-radius:6px;overflow:auto;font:13px/1.6 ui-monospace,Consolas,monospace;direction:ltr;text-align:left}
 code{font-family:ui-monospace,Consolas,monospace;font-size:.92em}
 p code,li code,td code{background:var(--soft);border:1px solid var(--line);padding:0 5px;border-radius:4px}
 blockquote{margin:.6em 0;padding:0 14px;border-inline-start:1px solid var(--ctl);color:var(--mut)}
-.tw{overflow:auto} table{border-collapse:collapse;margin:.6em 0} th,td{border:1px solid var(--line);padding:5px 10px}
-.chip{display:inline-block;margin:4px 0;padding:2px 10px;border:1px solid var(--ctl);border-radius:6px;font-size:13px;color:var(--fg)}
+.tw{overflow:auto} table{border-collapse:collapse;margin:.6em 0} th,td{border:1px solid var(--line);padding:5px 10px} th{background:var(--soft)}
+.chip{display:inline-block;margin:4px 0;padding:2px 10px;border:1px solid var(--ctl);border-radius:6px;font-size:13px;color:var(--fg);text-decoration:none}
+.chip:hover{background:var(--soft)}
 details.think,details.tool{margin:8px 0;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;color:var(--mut)}
 details summary{cursor:pointer}
 .note{font-size:13px;color:var(--mut);margin:6px 0}
 .src{font-size:13px;color:var(--mut)}
 figure{margin:8px 0} figcaption{font-size:12px;color:var(--mut)}
-h2.sec{margin:36px 0 8px;font-size:18px;font-weight:600}
+h2.sec{margin:40px 0 8px;font-size:19px;font-weight:600}
 .art{margin:8px 0;border:1px solid var(--line);border-radius:6px;padding:4px 12px}
-.ft{margin-top:44px;text-align:center;color:var(--mut);font-size:13px}
+.ft{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;color:var(--mut);font-size:13px}
+.ft .brand{color:var(--fg)}
 .hide-think .think,.hide-tool .tool{display:none}
 .hidden{display:none!important}
-@media (max-width:600px){body{font-size:14.5px}.wrap{padding:8px 12px 48px}.top{padding:8px 12px}h1.title{font-size:20px;margin-top:16px}.msg.Human{padding:10px 12px}.top .in{gap:8px}.top input[type=search]{flex-basis:100%}}
-@media print{.top{display:none}body{background:#fff;color:#000}.msg{break-inside:avoid}.msg.Human{border:1px solid #ccc}pre{white-space:pre-wrap}}
+.stats{display:flex;flex-wrap:wrap;gap:6px 28px;margin:10px 0 0;color:var(--mut);font-size:13.5px} .stats b{font-size:22px;font-weight:600;color:var(--fg);margin-inline-end:4px}
+.tools{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0 4px}
+.tools input[type=search],.tools select{min-height:36px;padding:2px 10px;border:1px solid var(--ctl);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
+.tools input[type=search]{flex:1 1 220px}
+.row{display:grid;grid-template-columns:minmax(0,1fr) 150px 96px 64px;gap:4px 16px;align-items:baseline;padding:10px 4px;border-bottom:1px solid var(--line);color:var(--fg);text-decoration:none}
+.row:hover{background:var(--soft)} .row:hover b{text-decoration:underline}
+.row b{font-weight:600;overflow-wrap:anywhere} .row span{color:var(--mut);font-size:13px}
+.row.h{color:var(--mut);font-size:12.5px;padding:8px 4px;border-bottom:1px solid var(--ctl)} .row.h:hover{background:none}
+.empty{padding:28px 0;color:var(--mut)}
+@media (max-width:700px){
+  body{font-size:14.5px}.wrap{padding:4px 12px 48px}.mast .in{padding:8px 12px}
+  h1.title{font-size:22px}.hero{padding-top:18px}
+  .msg{grid-template-columns:1fr;gap:6px;padding:14px 0}.hd{display:flex;gap:12px;align-items:center}
+  .mast input[type=search]{flex-basis:100%;max-width:none}
+  .row{grid-template-columns:1fr auto}.row .c-p,.row.h{display:none}.row .c-d{grid-column:1}
+}
+@media print{.mast,.tools{display:none}body{background:#fff;color:#000}.msg{break-inside:avoid}.msg.Human .bd{border:1px solid #ccc;background:none}pre{white-space:pre-wrap}}
 `;
 
   function renderBlocks(blocks) {
@@ -153,27 +192,26 @@ h2.sec{margin:36px 0 8px;font-size:18px;font-weight:600}
   }
 
   function viewerHtml(o) {
-    const { title, meta = [], views = [], artifacts = [], brand, fontBase } = o;
-    const msgs = views.map((v) => `<article class="msg ${v.role}" id="m${v.n}"><div class="hd"><span class="who">${v.role === 'Human' ? 'Human' : 'Claude'} · #${v.n}</span><time dir="ltr">${esc(v.when || '')}</time></div><div class="bd" dir="auto">${renderBlocks(v.blocks)}</div></article>`).join('\n');
+    const { title, meta = [], views = [], artifacts = [], brand, assetBase } = o;
+    const msgs = views.map((v) => `<article class="msg ${v.role}" id="m${v.n}"><div class="hd"><div class="who">${v.role === 'Human' ? 'Human' : 'Claude'}</div><div><a href="#m${v.n}">#${v.n}</a> <time dir="ltr">${esc(v.when || '')}</time></div></div><div class="bd" dir="auto">${renderBlocks(v.blocks)}</div></article>`).join('\n');
     const arts = artifacts.length ? '<h2 class="sec">Artifacts و فایل‌ها (آخرین نسخه)</h2>' + artifacts.map((a) =>
       `<details class="art"><summary><b>${esc(a.title)}</b> <small>${esc(a.path)}</small> · <a href="${relUrl(a.path)}">باز کردن فایل</a></summary>${a.content != null ? `<pre><code>${esc(a.content)}</code></pre>` : '<p class="note">فایل بزرگ است؛ از لینک باز کنید.</p>'}</details>`).join('\n') : '';
-    return `<!doctype html>
-<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)}</title><style>${BASE_CSS(fontBase)}</style></head>
-<body>
-<div class="top"><div class="in">
-  <input type="search" id="q" placeholder="جست‌وجو در چت…" aria-label="جست‌وجو">
+    const tools = `<input type="search" id="q" placeholder="جست‌وجو در چت…" aria-label="جست‌وجو">
   <label><input type="checkbox" id="t1" checked> تفکر</label>
   <label><input type="checkbox" id="t2" checked> ابزارها</label>
   <button id="th" type="button">تیره / روشن</button>
-  <button id="pr" type="button">چاپ / PDF</button>
-</div></div>
+  <button id="pr" type="button">چاپ / PDF</button>`;
+    return `<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(title)}</title><style>${BASE_CSS(assetBase)}</style></head>
+<body>
+${masthead(brand, assetBase, tools)}
 <div class="wrap">
-  <h1 class="title" dir="auto">${esc(title)}</h1>
-  <div class="meta">${meta.map(([k, v]) => `<span>${esc(k)}: ${esc(v)}</span>`).join('')}</div>
+  <section class="hero"><h1 class="title" dir="auto">${esc(title)}</h1>
+  <p class="meta">${meta.map(([k, v]) => `<span>${esc(k)}: <b>${esc(v)}</b></span>`).join('')}</p></section>
   ${msgs}
   ${arts}
-  ${brandFooter(brand)}
+  ${brandFooter(brand, assetBase)}
 </div>
 <script>
 (function(){
@@ -217,33 +255,41 @@ h2.sec{margin:36px 0 8px;font-size:18px;font-weight:600}
 
   // فهرست قابل‌جست‌وجوی پشتیبان کامل
   function indexHtml(o) {
-    const { entries = [], brand, title = 'Claude backup', fontBase } = o;
+    const { entries = [], brand, title = 'Claude backup', assetBase } = o;
+    const msgTotal = entries.reduce((n, e) => n + (e.messages || 0), 0);
+    const projects = [...new Set(entries.map((e) => e.project).filter(Boolean))].sort();
     const rows = entries.map((e) => {
       const href = encodeURI(e.folder + '/' + (e.viewer ? 'viewer.html' : 'conversation.md'));
-      return `<a class="card" href="${esc(href)}" data-s="${esc((e.title + ' ' + (e.project || '')).toLowerCase())}" data-d="${esc(e.updated || '')}">
-  <b dir="auto">${esc(e.title)}</b>
-  <span>${esc((e.updated || e.created || '').slice(0, 10))} · ${e.messages} پیام${e.model ? ' · ' + esc(e.model) : ''}${e.project ? ' · پروژه: ' + esc(e.project) : ''}</span></a>`;
+      const date = (e.updated || e.created || '').slice(0, 10);
+      return `<a class="row" href="${esc(href)}" data-s="${esc((e.title + ' ' + (e.project || '')).toLowerCase())}" data-d="${esc(e.updated || '')}" data-t="${esc(e.title.toLowerCase())}" data-p="${esc(e.project || '')}" data-m="${e.messages || 0}">
+  <b><bdi>${esc(e.title)}</bdi></b><span class="c-p"><bdi>${esc(e.project || '')}</bdi></span><span class="c-d" dir="ltr">${esc(date)}</span><span class="c-m">${e.messages || 0}</span></a>`;
     }).join('\n');
+    const tools = `<input type="search" id="q" placeholder="جست‌وجو در عنوان چت‌ها…" aria-label="جست‌وجو">
+  <button id="th" type="button">تیره / روشن</button>`;
     return `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)}</title><style>${BASE_CSS(fontBase)}
-.card{display:block;padding:10px 2px;border-bottom:1px solid var(--line);text-decoration:none;color:var(--fg)}
-.card:hover b{text-decoration:underline} .card b{font-weight:600} .card span{display:block;color:var(--mut);font-size:13px}
-</style></head><body>
-<div class="top"><div class="in"><input type="search" id="q" placeholder="جست‌وجو در عنوان چت‌ها…" aria-label="جست‌وجو"><button id="th" type="button">تیره / روشن</button><span style="color:var(--mut);font-size:13px">${entries.length} چت</span></div></div>
-<div class="wrap"><h1 class="title">${esc(title)}</h1>
-${rows}
-${brandFooter(brand)}</div>
+<title>${esc(title)}</title><style>${BASE_CSS(assetBase)}</style></head><body>
+${masthead(brand, assetBase, tools)}
+<div class="wrap"><section class="hero"><h1 class="title">${esc(title)}</h1>
+<p class="stats"><span><b>${entries.length}</b>چت</span><span><b>${msgTotal}</b>پیام</span>${projects.length ? `<span><b>${projects.length}</b>پروژه</span>` : ''}</p>
+<div class="tools">${projects.length ? `<select id="pj" aria-label="پروژه"><option value="">همه‌ی پروژه‌ها</option>${projects.map((p) => `<option>${esc(p)}</option>`).join('')}</select>` : ''}
+<select id="so" aria-label="مرتب‌سازی"><option value="d">تازه‌ترین</option><option value="m">بیشترین پیام</option><option value="t">عنوان</option></select></div></section>
+<div class="row h" aria-hidden="true"><span>عنوان</span><span class="c-p">پروژه</span><span>آخرین تغییر</span><span>پیام</span></div>
+<div id="ls">${rows}</div>
+<p class="empty hidden" id="em">چتی با این فیلتر پیدا نشد.</p>
+${brandFooter(brand, assetBase)}</div>
 <script>
-(function(){var r=document.documentElement,cs=[].slice.call(document.querySelectorAll('.card'));
-cs.sort(function(a,b){return (b.dataset.d||'').localeCompare(a.dataset.d||'')}).forEach(function(c){c.parentNode.insertBefore(c,document.querySelector('.ft'))});
+(function(){var r=document.documentElement,ls=document.getElementById('ls'),cs=[].slice.call(ls.children),q=document.getElementById('q'),pj=document.getElementById('pj'),so=document.getElementById('so');
 try{if(localStorage.getItem('cce-dark')==='1'||(localStorage.getItem('cce-dark')===null&&matchMedia('(prefers-color-scheme: dark)').matches))r.classList.add('dark')}catch(e){}
 document.getElementById('th').onclick=function(){r.classList.toggle('dark');try{localStorage.setItem('cce-dark',r.classList.contains('dark')?'1':'0')}catch(e){}};
-document.getElementById('q').oninput=function(){var s=this.value.trim().toLowerCase();cs.forEach(function(c){c.classList.toggle('hidden',!!s&&c.dataset.s.indexOf(s)<0)})};
+function run(){var s=q.value.trim().toLowerCase(),p=pj?pj.value:'',k=so.value,n=0;
+cs.sort(function(a,b){return k==='m'?b.dataset.m-a.dataset.m:k==='t'?a.dataset.t.localeCompare(b.dataset.t):(b.dataset.d||'').localeCompare(a.dataset.d||'')}).forEach(function(c){ls.appendChild(c);var h=(s&&c.dataset.s.indexOf(s)<0)||(p&&c.dataset.p!==p);c.classList.toggle('hidden',!!h);if(!h)n++});
+document.getElementById('em').classList.toggle('hidden',n>0)}
+q.oninput=run;so.onchange=run;if(pj)pj.onchange=run;run();
 })();
 </script></body></html>`;
   }
 
-  const api = { FONT_FILES, esc, mdToHtml, viewerHtml, noteMd, indexHtml };
+  const api = { FONT_FILES, LOGO_FILE, esc, mdToHtml, viewerHtml, noteMd, indexHtml };
   root.CCE_RENDER = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

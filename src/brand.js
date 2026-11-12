@@ -6,7 +6,7 @@
     nameFa: 'نویاتیس',
     url: 'https://noiatis.ir/',
     logoFile: 'icons/logo.png',
-    version: '2.3.2',
+    version: '2.8.2',
   };
 
   // لوگو PNG شفاف است و رنگ‌های تیره دارد؛ روی زمینه‌ی تیره گم می‌شد،
@@ -21,7 +21,9 @@
     const img = new Image();
     img.alt = '';
     img.setAttribute('aria-hidden', 'true');
-    img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block';
+    // تصویر به‌خودیِ خود قابل درگ است؛ درگ بومی مرورگر رویداد pointer را قطع می‌کرد و Claude هم فکر می‌کرد فایل می‌خواهیم آپلود کنیم
+    img.draggable = false;
+    img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;-webkit-user-drag:none;user-select:none';
     img.src = ext.runtime.getURL(BRAND.logoFile);
     tile.appendChild(img);
     return tile;

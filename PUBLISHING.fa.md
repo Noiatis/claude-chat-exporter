@@ -24,7 +24,7 @@ git push -u origin main
 ```bash
 npm install
 npm test && npm run build      # خروجی در dist/
-git tag v2.3.2                 # باید با version در package.json یکی باشد
+git tag v2.8.2                 # باید با version در package.json یکی باشد
 git push origin v2.2.0
 ```
 workflow با نام **Release** دو فایل `claude-chat-exporter-chrome-<نسخه>.zip` و `claude-chat-exporter-firefox-<نسخه>.zip` را به صفحه‌ی Releases اضافه می‌کند. هر کس می‌تواند همین‌ها را دستی نصب کند (بدون استور)، ولی کاربر عادی از استور نصب می‌کند.
@@ -58,7 +58,7 @@ workflow با نام **Release** دو فایل `claude-chat-exporter-chrome-<ن�
 # 1) version را در package.json بالا ببرید (مثلاً 2.3.0)
 npm run version:sync     # manifest و brand.js را هم‌نسخه می‌کند
 npm test && npm run build
-git commit -am "v2.3.2" && git tag v2.3.2 && git push && git push --tags
+git commit -am "v2.8.2" && git tag v2.8.2 && git push && git push --tags
 ```
 
 ## ۷. نکات مهم

@@ -72,17 +72,78 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   const idx = await read(zb, (n) => n === 'index.html');
   assert(idx.includes('viewer.html'));
 
-  // فونت: یک بار در ریشه‌ی ZIP، نه تکرار در هر چت
-  const fonts = { 'Ahang-Regular.woff2': new Uint8Array([1, 2]), 'Ahang-DemiBold.woff2': new Uint8Array([3, 4]) };
+  // فونت و لوگو: یک بار در ریشه‌ی ZIP، نه تکرار در هر چت
+  const assets = { 'Ahang-Regular.woff2': new Uint8Array([1, 2]), 'Ahang-DemiBold.woff2': new Uint8Array([3, 4]), 'logo.png': new Uint8Array([5]) };
   const withFont = [];
-  await CCE.exportMany({ fetchFn, origin: 'https://claude.ai', org, chats, options: { fonts }, onPart: async (p) => withFont.push(p) });
+  await CCE.exportMany({ fetchFn, origin: 'https://claude.ai', org, chats, options: { assets }, onPart: async (p) => withFont.push(p) });
   const zf = await CCE.unzip(withFont[0].data);
   assert.strictEqual(zf.names.filter((n) => n.endsWith('Ahang-Regular.woff2')).length, 1);
   assert((await read(zf, (n) => n === 'index.html')).includes('assets/Ahang-Regular.woff2'));
   assert((await read(zf, (n) => n.endsWith('/viewer.html'))).includes('../assets/Ahang-Regular.woff2'));
-  res = await CCE.exportChat({ fetchFn, origin: 'https://claude.ai', pathname: '/chat/' + mkId(1), options: { fonts } });
+  res = await CCE.exportChat({ fetchFn, origin: 'https://claude.ai', pathname: '/chat/' + mkId(1), options: { assets, brand: { name: 'Noiatis', url: 'https://noiatis.ir/' } } });
   z = await CCE.unzip(res.data);
   assert(z.names.some((n) => n.endsWith('/assets/Ahang-DemiBold.woff2')));
+  assert((await read(z, (n) => n.endsWith('/viewer.html'))).includes('assets/logo.png'), 'logo in viewer');
+
+  // فایل خروجی Claude که با bash ساخته شده: اگر دانلود شد ذخیره شود، اگر نشد در HANDOFF بیاید
+  const pc = mkConv(4);
+  pc.chat_messages[1].content.push({ type: 'tool_use', name: 'present_files', input: { filepaths: ['/mnt/user-data/outputs/ok.zip', '/mnt/user-data/outputs/gone.zip'] } });
+  const pf = async (url, o) => {
+    if (url.includes('wiggle/download-file') && url.includes('ok.zip')) return { ok: true, headers: { get: () => 'application/zip' }, arrayBuffer: async () => new Uint8Array([80, 75, 5, 6]).buffer };
+    if (url.includes('wiggle')) return { ok: false, status: 404 };
+    if (/chat_conversations\/[0-9a-f-]{36}/.test(url)) return { ok: true, headers: { get: () => 'application/json' }, json: async () => pc };
+    return fetchFn(url, o);
+  };
+  res = await CCE.exportChat({ fetchFn: pf, origin: 'https://claude.ai', pathname: '/chat/' + mkId(4), options: {} });
+  z = await CCE.unzip(res.data);
+  assert(z.names.some((n) => n.endsWith('/outputs/ok.zip')), 'presented zip saved');
+  assert(!z.names.some((n) => n.endsWith('/outputs/gone.zip')));
+  assert((await read(z, (n) => n.endsWith('transfer/HANDOFF.md'))).includes('gone.zip'), 'missing file listed in HANDOFF');
+
+  // آپلود از نوع blob: آدرس معمول فایل ۴۰۴ می‌دهد ولی مسیر sandbox جواب می‌دهد
+  const bc = mkConv(5);
+  bc.chat_messages[0].files = [{ file_kind: 'blob', file_uuid: 'b-1', file_name: 'data.csv', path: '/mnt/user-data/uploads/data.csv' }];
+  const bf = async (url, o) => {
+    if (url.includes('wiggle/download-file') && url.includes('data.csv')) return { ok: true, headers: { get: () => 'text/csv' }, arrayBuffer: async () => new TextEncoder().encode('a,b\n1,2').buffer };
+    if (/chat_conversations\/[0-9a-f-]{36}/.test(url)) return { ok: true, headers: { get: () => 'application/json' }, json: async () => bc };
+    return fetchFn(url, o);
+  };
+  res = await CCE.exportChat({ fetchFn: bf, origin: 'https://claude.ai', pathname: '/chat/' + mkId(5), options: {} });
+  z = await CCE.unzip(res.data);
+  assert(z.names.some((n) => n.endsWith('/files/data.csv')), 'blob upload saved via sandbox path');
+
+  // فایل بزرگ: اگر فشرده شد zip، اگر نشد تکه‌تکه؛ هیچ‌کدام رد نشود
+  const big = mkConv(6);
+  big.chat_messages[0].files = [
+    { file_kind: 'blob', file_uuid: 'z-1', file_name: 'zeros.bin', path: '/mnt/user-data/uploads/zeros.bin' },
+    { file_kind: 'blob', file_uuid: 'z-2', file_name: 'noise.bin', path: '/mnt/user-data/uploads/noise.bin' },
+  ];
+  const noise = new Uint8Array(6000); let sd = 7; for (let i = 0; i < noise.length; i++) { sd = (sd * 1103515245 + 12345) >>> 0; noise[i] = sd >>> 24; }
+  const gf = async (url, o) => {
+    if (url.includes('wiggle/download-file') && url.includes('zeros.bin')) return { ok: true, headers: { get: () => 'application/octet-stream' }, arrayBuffer: async () => new Uint8Array(5000).buffer };
+    if (url.includes('wiggle/download-file') && url.includes('noise.bin')) return { ok: true, headers: { get: () => 'application/octet-stream' }, arrayBuffer: async () => noise.buffer };
+    if (/chat_conversations\/[0-9a-f-]{36}/.test(url)) return { ok: true, headers: { get: () => 'application/json' }, json: async () => big };
+    return fetchFn(url, o);
+  };
+  res = await CCE.exportChat({ fetchFn: gf, origin: 'https://claude.ai', pathname: '/chat/' + mkId(6), options: { maxFileBytes: 2500 } });
+  z = await CCE.unzip(res.data);
+  assert(z.names.some((n) => n.endsWith('/transfer/files/zeros.bin.zip')), 'compressible file zipped');
+  assert(z.names.filter((n) => /\/transfer\/files\/noise\.bin\.zip\.\d{3}$/.test(n)).length >= 2, 'incompressible file split');
+  const man = JSON.parse(await read(z, (n) => n.endsWith('transfer/manifest.json')));
+  assert(man.skipped.length === 0, 'nothing skipped');
+
+  // تصویر WebP با نام .png باید پسوند درست بگیرد
+  const wc = mkConv(8);
+  wc.chat_messages[0].files = [{ file_kind: 'image', file_uuid: 'w-1', file_name: 'shot.png', preview_url: '/img/w1' }];
+  const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
+  const wf = async (url, o) => {
+    if (url.includes('/img/w1')) return { ok: true, headers: { get: () => 'image/webp' }, arrayBuffer: async () => webp.buffer };
+    if (/chat_conversations\/[0-9a-f-]{36}/.test(url)) return { ok: true, headers: { get: () => 'application/json' }, json: async () => wc };
+    return fetchFn(url, o);
+  };
+  res = await CCE.exportChat({ fetchFn: wf, origin: 'https://claude.ai', pathname: '/chat/' + mkId(8), options: {} });
+  z = await CCE.unzip(res.data);
+  assert(z.names.some((n) => n.endsWith('/files/shot.webp')) && !z.names.some((n) => n.endsWith('/files/shot.png')), 'webp renamed');
 
   // ایموجی در خروجی نباید باشد
   const md1 = await read(z, (n) => n.endsWith('/conversation.md'));

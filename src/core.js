@@ -208,7 +208,7 @@
     const opt = Object.assign({
       includeThinking: true, includeToolOutput: true, allBranches: false,
       transfer: true, redact: false, includeProject: true, viewer: true, note: false, aiSummary: false,
-      sinceMessageUuid: null, brand: null, fonts: null,
+      sinceMessageUuid: null, brand: null, assets: null,
       tokenBudget: 120000, inlineMax: 60000, partChars: 200000, tailMessages: 6,
       maxFileBytes: 30 * 1024 * 1024,
     }, options);
@@ -224,11 +224,7 @@
       convId = m[1];
     }
 
-    const getJson = async (url) => {
-      const r = await fetchFn(origin + url, { credentials: 'include', headers: { Accept: 'application/json' } });
-      if (!r.ok) throw new Error(r.status + ' ' + url);
-      return r.json();
-    };
+    const getJson = makeGetJson(fetchFn, origin);
 
     onProgress('در حال خواندن اطلاعات حساب…', { phase: 'account' });
     let orgIds;
@@ -356,7 +352,7 @@
       if (!inp) return null;
       if (name === 'present_files') {
         const list = inp.filepaths || inp.paths || [];
-        for (const f of list) { const g = gen.get(norm(f)); if (g) g.presented = true; }
+        for (const f of list) { const g = gen.get(norm(f)); if (g) g.presented = true; else remotePresented.add(norm(f)); }
         return { kind: 'present', list };
       }
       let cmd, path = inp.path, text = inp.file_text, oldS = inp.old_str, newS = inp.new_str;
@@ -387,7 +383,18 @@
     }
 
     const downloaded = new Map();
+    // فایل‌هایی که نتوانستیم بگیریم؛ در HANDOFF هم نوشته می‌شود تا Claude در چت جدید بداند چه کم است
+    const missing = [];
+    // فایل‌هایی که Claude با ابزار present_files نشان داده ولی با bash ساخته بود (مثل zip پروژه)؛ متنشان در چت نیست
+    const remotePresented = new Set();
     const resolveUrl = (p) => (p ? (/^https?:/i.test(p) ? p : origin + p) : null);
+    function sniffImageExt(h) {
+      if (h[0] === 0x89 && h[1] === 0x50 && h[2] === 0x4e && h[3] === 0x47) return 'png';
+      if (h[0] === 0xff && h[1] === 0xd8) return 'jpg';
+      if (h[0] === 0x47 && h[1] === 0x49 && h[2] === 0x46) return 'gif';
+      if (h[0] === 0x52 && h[1] === 0x49 && h[2] === 0x46 && h[3] === 0x46 && h[8] === 0x57 && h[9] === 0x45) return 'webp';
+      return '';
+    }
     async function downloadFile(f) {
       const id = f.file_uuid || f.uuid;
       if (downloaded.has(id)) return downloaded.get(id);
@@ -397,6 +404,9 @@
       if (isImg) cands.push(f.image_asset && f.image_asset.url, f.preview_url, f.thumbnail_url);
       else cands.push(`/api/organizations/${org}/files/${id}/contents`, `/api/${org}/files/${id}/contents`, f.document_asset && f.document_asset.url);
       cands.push(`/api/organizations/${org}/files/${id}/contents`, `/api/${org}/files/${id}/contents`, f.preview_url, f.thumbnail_url);
+      // فایل‌های «blob» (آپلودهایی که داخل sandbox Claude می‌نشینند: csv، ipynb، zip، …) با آدرس معمول فایل گرفته نمی‌شوند
+      // ولی مسیرشان (/mnt/user-data/uploads/…) را همان مسیرِ دانلود فایل‌های خروجی Claude می‌خواند.
+      if (f.path) cands.push(`/api/organizations/${org}/conversations/${convId}/wiggle/download-file?path=${encodeURIComponent(f.path)}`);
       const seenU = new Set();
       for (const c of cands) {
         const url = resolveUrl(c);
@@ -413,6 +423,8 @@
           const buf = await r.arrayBuffer();
           let fname = name;
           if (!/\.[A-Za-z0-9]{1,5}$/.test(fname)) { const e = extFromMime(ct); if (e) fname += '.' + e; }
+          // claude.ai گاهی تصویر آپلودی را به‌صورت WebP می‌دهد ولی نامش .png است؛ پسوند را با محتوای واقعی یکی می‌کنیم
+          if (isImg) { const real = sniffImageExt(new Uint8Array(buf, 0, Math.min(12, buf.byteLength))); if (real && real !== extOf(fname).replace('jpeg', 'jpg')) fname = fname.replace(/\.[A-Za-z0-9]{1,5}$/, '') + '.' + real; }
           const path = uniq(`files/${fname}`);
           dir.file(path, buf);
           const res = { path, name: fname };
@@ -426,6 +438,7 @@
         } catch (e) { /* آدرس بعدی را امتحان می‌کنیم */ }
       }
       log(`دانلود فایل ناموفق: ${f.file_name} (${id})`);
+      missing.push({ name: f.file_name || id, reason: 'download failed' });
       downloaded.set(id, null);
       return null;
     }
@@ -545,6 +558,34 @@
       views.push({ n, role, when: when(msg.created_at), blocks: viewBlocks });
     }
 
+    // فایل‌های خروجی Claude (/mnt/user-data/outputs/…) که با bash ساخته شده‌اند.
+    // آدرس دانلودشان مستند نیست؛ چند مسیر را امتحان می‌کنیم و اگر نشد صادقانه گزارش می‌دهیم.
+    for (const p of remotePresented) {
+      if (gen.has(p)) continue;
+      const base = baseName(p);
+      const q = encodeURIComponent(p);
+      let ok = false;
+      for (const u of [
+        `/api/organizations/${org}/conversations/${convId}/wiggle/download-file?path=${q}`,
+        `/api/organizations/${org}/chat_conversations/${convId}/wiggle/download-file?path=${q}`,
+      ]) {
+        try {
+          const r = await fetchFn(origin + u, { credentials: 'include' });
+          if (!r.ok) continue;
+          const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
+          if (/application\/json|text\/html/i.test(ct) && !/\.(json|html?)$/i.test(base)) continue;
+          const buf = await r.arrayBuffer();
+          if (buf.byteLength > opt.maxFileBytes) { missing.push({ name: base, reason: 'larger than 30MB' }); ok = true; break; }
+          const path = uniq('outputs/' + sanitize(base, 120));
+          put(path, buf);
+          items.push({ kind: 'upload', name: base, buf: new Uint8Array(buf) });
+          ok = true;
+          break;
+        } catch (e) { /* مسیر بعدی */ }
+      }
+      if (!ok) { log(`فایل خروجی Claude دانلود نشد: ${base}`); missing.push({ name: base, reason: 'not available for download (Claude output)' }); }
+    }
+
     const orderedItems = [];
     for (const a of artifacts.values()) {
       if (!a.versions.length) continue;
@@ -571,14 +612,14 @@
     const artView = allItems.filter((it) => it.text != null && it.src).map((it) => ({ title: it.name, path: it.src, content: it.text.length <= 200000 ? it.text : null }));
     let noteName = null;
     if (RENDER && opt.viewer) {
-      // در حالت چندچتی فونت یک بار در ریشه‌ی ZIP می‌نشیند (exportMany)، نه در هر پوشه
-      let fontBase = null;
-      if (opt.fonts) {
-        fontBase = shared ? '../assets/' : 'assets/';
-        if (!shared) for (const f in opt.fonts) put('assets/' + f, opt.fonts[f]);
+      // در حالت چندچتی فونت و لوگو یک بار در ریشه‌ی ZIP می‌نشیند (exportMany)، نه در هر پوشه
+      let assetBase = null;
+      if (opt.assets) {
+        assetBase = shared ? '../assets/' : 'assets/';
+        if (!shared) for (const f in opt.assets) put('assets/' + f, opt.assets[f]);
       }
       const html = RENDER.viewerHtml({
-        title, brand: opt.brand, views, artifacts: artView, fontBase,
+        title, brand: opt.brand, views, artifacts: artView, assetBase,
         meta: [['Chat ID', convId], ['Model', conv.model || '-'], ['Created', when(conv.created_at)], ['Updated', when(conv.updated_at)], ['Messages', String(msgs.length)]].filter((x) => x[1] && x[1] !== '-'),
       });
       put('viewer.html', html);
@@ -595,9 +636,11 @@
       const est = (chars) => Math.ceil(chars / 3);
 
       // فایل کوچک داخل متن می‌آید، بزرگ‌ها پیوست جدا می‌شوند
+      const budgetChars = opt.tokenBudget * 3;
       const inlineBlocks = [];
+      const inlineText = []; // {index, it, txt, label}؛ برای کم کردن حجم اگر از سقف گذشت
       const attach = []; // {path, name, bytes, data}
-      const skipped = [];
+      const skipped = missing.slice();
       const attachUsed = new Set();
       const attachName = (name) => {
         let nm = sanitize(name, 100), i = 1;
@@ -610,6 +653,7 @@
         if (it.text != null) {
           const txt = R(it.text);
           if (txt.length <= opt.inlineMax) {
+            inlineText.push({ index: inlineBlocks.length, it, txt, label });
             inlineBlocks.push(`### FILE: ${label}\n\n${fence(txt, it.lang || '')}`);
           } else {
             const nm = attachName(it.name);
@@ -618,14 +662,45 @@
           }
         } else if (it.buf) {
           if (it.buf.byteLength > opt.maxFileBytes) {
-            skipped.push({ name: it.name, reason: 'larger than 30MB' });
-            inlineBlocks.push(`### FILE: ${label}\n\n(binary file too large to transfer)`);
+            // claude.ai فایل بزرگ‌تر از ۳۰ مگابایت را نمی‌پذیرد؛ اول zip می‌کنیم (CSV و متن خیلی کوچک می‌شوند)
+            // و اگر باز هم بزرگ بود، تکه‌تکه می‌کنیم تا چیزی از دست نرود.
+            const zipped = makeZip();
+            zipped.file(it.name, it.buf);
+            const packed = await zipped.generate();
+            const chunk = Math.max(1, opt.maxFileBytes - 1024 * 1024);
+            let pieces;
+            if (packed.length <= opt.maxFileBytes) pieces = [[it.name + '.zip', packed]];
+            else {
+              pieces = [];
+              for (let off = 0, k = 1; off < packed.length; off += chunk, k++) pieces.push([`${it.name}.zip.${String(k).padStart(3, '0')}`, packed.subarray(off, off + chunk)]);
+            }
+            const names = pieces.map(([n, d]) => {
+              const nm = attachName(n);
+              attach.push({ rel: 'files/' + nm, name: nm, data: d, bytes: d.length });
+              return nm;
+            });
+            const joined = `${it.name}.zip`;
+            const how = pieces.length > 1 ? ` Join the parts in order (cat ${joined}.* > ${joined}) and unzip.` : ' Unzip it to get the original file.';
+            inlineBlocks.push(`### FILE: ${label}\n\n(binary file larger than ${Math.round(opt.maxFileBytes / 1048576)}MB — attached as ${names.map((n) => '"' + n + '"').join(', ')}.${how})`);
+            log(`${it.name}: بزرگ‌تر از سقف بود؛ ${pieces.length > 1 ? 'در ' + pieces.length + ' تکه' : 'فشرده'} به بسته‌ی انتقال رفت.`);
           } else {
             const nm = attachName(it.name);
             attach.push({ rel: 'files/' + nm, name: nm, data: it.buf, bytes: it.buf.byteLength });
             inlineBlocks.push(`### FILE: ${label}\n\n(binary file — attached separately as "${nm}")`);
           }
         }
+      }
+
+      // سقف توکن فقط روی پیام‌ها اثر داشت و فایل‌های داخل‌متن آن را بی‌خبر می‌ترکاند.
+      // اگر فایل‌های داخل‌متن بیشتر از نیمی از سقف شدند، بزرگ‌ترین‌ها را پیوست جدا می‌کنیم.
+      let inlineChars = inlineBlocks.reduce((n, x) => n + x.length, 0);
+      for (const c of inlineText.sort((a, b) => b.txt.length - a.txt.length)) {
+        if (inlineChars <= budgetChars * 0.5) break;
+        const nm = attachName(c.it.name);
+        attach.push({ rel: 'files/' + nm, name: nm, data: c.txt, bytes: new TextEncoder().encode(c.txt).length });
+        const moved = `### FILE: ${c.label}\n\n(attached separately as "${nm}" to keep the context small)`;
+        inlineChars -= inlineBlocks[c.index].length - moved.length;
+        inlineBlocks[c.index] = moved;
       }
 
       const projBlock = project && (project.instructions || project.description)
@@ -640,7 +715,6 @@
         if (level >= 2 && !isTail && t.length > 2500) t = t.slice(0, 2000) + '\n…[truncated — full text in conversation.md]';
         return `### [${c.n}] ${c.role}${c.when ? ' — ' + c.when : ''}\n\n${R(t)}`;
       });
-      const budgetChars = opt.tokenBudget * 3;
       let level = 0, transcript = buildTranscript(0);
       const fixedChars = head.length + (projBlock ? projBlock.length : 0) + inlineBlocks.reduce((s, x) => s + x.length, 0);
       while (level < 2 && fixedChars + transcript.reduce((s, x) => s + x.length, 0) > budgetChars) { level++; transcript = buildTranscript(level); }
@@ -770,13 +844,16 @@
     return { data, filename: `${rootName}_${date}${partial ? '_new' : ''}.zip`, report, stats, meta, counts: meta.counts, lastMessageUuid: meta.lastMessageUuid, updatedAt: conv.updated_at, convId };
   }
 
+  // GET ساده‌ی JSON با کوکی نشست؛ هر دو مسیر (خروجی یک چت و فهرست چت‌ها) از همین استفاده می‌کنند
+  const makeGetJson = (fetchFn, origin) => async (url) => {
+    const r = await fetchFn(origin + url, { credentials: 'include', headers: { Accept: 'application/json' } });
+    if (!r.ok) throw new Error(r.status + ' ' + url);
+    return r.json();
+  };
+
   async function listChats(deps) {
     const { fetchFn, origin, cookie = '' } = deps;
-    const getJson = async (url) => {
-      const r = await fetchFn(origin + url, { credentials: 'include', headers: { Accept: 'application/json' } });
-      if (!r.ok) throw new Error(r.status + ' ' + url);
-      return r.json();
-    };
+    const getJson = makeGetJson(fetchFn, origin);
     const orgsRaw = await getJson('/api/organizations');
     let orgIds = orgsRaw.map((o) => o.uuid || o.id).filter(Boolean);
     const last = (cookie.match(/lastActiveOrg=([0-9a-f-]{36})/) || [])[1];
@@ -811,8 +888,8 @@
     const parts = [], done = [], failed = [];
     const flush = async (final) => {
       if (!entries.length) return;
-      if (options.fonts) for (const f in options.fonts) zip.file('assets/' + f, options.fonts[f]);
-      zip.file('index.html', RENDER.indexHtml({ entries, brand: options.brand, title: 'Claude backup — ' + date, fontBase: options.fonts ? 'assets/' : null }));
+      if (options.assets) for (const f in options.assets) zip.file('assets/' + f, options.assets[f]);
+      zip.file('index.html', RENDER.indexHtml({ entries, brand: options.brand, title: 'Claude backup — ' + date, assetBase: options.assets ? 'assets/' : null }));
       zip.file('index.json', JSON.stringify(entries, null, 2));
       onProgress('در حال فشرده‌سازی ZIP…', { phase: 'bulk-zip', bulk: { current: done.length, total: chats.length } });
       const data = await zip.generate();
@@ -845,7 +922,8 @@
         failed.push({ chat, error: err && err.message });
         onProgress(`چت «${chat.name}» ناموفق بود: ${err && err.message}`, { log: true });
       }
-      await new Promise((r) => setTimeout(r, 250));
+      // مکث کوتاه بین چت‌ها لازم نیست و در تبِ پس‌زمینه کروم تایمرها را تا یک دقیقه کند می‌کند؛ فقط به حلقه‌ی رویداد نفس می‌دهیم
+      await Promise.resolve();
     }
     await flush(true);
     return { parts, done, failed };
