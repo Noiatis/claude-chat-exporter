@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Claude Chat Exporter",
-  "version": "2.8.2",
+  "version": "2.8.3",
   "description": "Export Claude chats (single or all) as ZIP with offline viewer, Obsidian notes, and a transfer pack to continue in another account.",
   "icons": {
     "16": "icons/16.png",
@@ -43,8 +43,8 @@
     {
       "resources": [
         "icons/logo.png",
-        "fonts/Ahang-Regular.woff2",
-        "fonts/Ahang-DemiBold.woff2"
+        "fonts/Vazirmatn-Regular.woff2",
+        "fonts/Vazirmatn-SemiBold.woff2"
       ],
       "matches": [
         "https://claude.ai/*"

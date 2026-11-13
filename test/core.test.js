@@ -73,16 +73,16 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   assert(idx.includes('viewer.html'));
 
   // فونت و لوگو: یک بار در ریشه‌ی ZIP، نه تکرار در هر چت
-  const assets = { 'Ahang-Regular.woff2': new Uint8Array([1, 2]), 'Ahang-DemiBold.woff2': new Uint8Array([3, 4]), 'logo.png': new Uint8Array([5]) };
+  const assets = { 'Vazirmatn-Regular.woff2': new Uint8Array([1, 2]), 'Vazirmatn-SemiBold.woff2': new Uint8Array([3, 4]), 'logo.png': new Uint8Array([5]) };
   const withFont = [];
   await CCE.exportMany({ fetchFn, origin: 'https://claude.ai', org, chats, options: { assets }, onPart: async (p) => withFont.push(p) });
   const zf = await CCE.unzip(withFont[0].data);
-  assert.strictEqual(zf.names.filter((n) => n.endsWith('Ahang-Regular.woff2')).length, 1);
-  assert((await read(zf, (n) => n === 'index.html')).includes('assets/Ahang-Regular.woff2'));
-  assert((await read(zf, (n) => n.endsWith('/viewer.html'))).includes('../assets/Ahang-Regular.woff2'));
+  assert.strictEqual(zf.names.filter((n) => n.endsWith('Vazirmatn-Regular.woff2')).length, 1);
+  assert((await read(zf, (n) => n === 'index.html')).includes('assets/Vazirmatn-Regular.woff2'));
+  assert((await read(zf, (n) => n.endsWith('/viewer.html'))).includes('../assets/Vazirmatn-Regular.woff2'));
   res = await CCE.exportChat({ fetchFn, origin: 'https://claude.ai', pathname: '/chat/' + mkId(1), options: { assets, brand: { name: 'Noiatis', url: 'https://noiatis.ir/' } } });
   z = await CCE.unzip(res.data);
-  assert(z.names.some((n) => n.endsWith('/assets/Ahang-DemiBold.woff2')));
+  assert(z.names.some((n) => n.endsWith('/assets/Vazirmatn-SemiBold.woff2')));
   assert((await read(z, (n) => n.endsWith('/viewer.html'))).includes('assets/logo.png'), 'logo in viewer');
 
   // فایل خروجی Claude که با bash ساخته شده: اگر دانلود شد ذخیره شود، اگر نشد در HANDOFF بیاید

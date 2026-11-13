@@ -27,7 +27,7 @@ npm test            # core logic tests
 npm run build       # dist/chrome, dist/firefox + zips
 npm run lint:firefox
 ```
-Branding lives in `src/brand.js` (name, site, logo). The UI uses one bundled font, Ahang by FontIran (commercial licence, see `src/fonts/README.md`), so the panel, popup and exported pages look the same. Design rules and the reasoning behind them: [DESIGN.md](DESIGN.md).
+Branding lives in `src/brand.js` (name, site, logo). The UI uses one bundled font, Vazirmatn (SIL OFL 1.1, see `src/fonts/OFL.txt`), so the panel, popup and exported pages look the same. Design rules and the reasoning behind them: [DESIGN.md](DESIGN.md).
 
 فارسی: [README.fa.md](README.fa.md)
 
