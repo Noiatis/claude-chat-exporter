@@ -1,6 +1,6 @@
 {
   "name": "claude-chat-exporter",
-  "version": "2.3.2",
+  "version": "2.8.2",
   "private": true,
   "description": "Browser extension (Chrome + Firefox) to export Claude chats, with offline viewer, Obsidian notes and an account-transfer pack.",
   "license": "MIT",

@@ -9,7 +9,7 @@
 
   const DEF = {
     transfer: true, includeProject: true, redact: false, viewer: true, note: false, aiSummary: false, incremental: false,
-    includeThinking: true, includeToolOutput: true, allBranches: false, tokenBudget: 120000,
+    includeThinking: true, includeToolOutput: true, allBranches: false, pjclean: true, tokenBudget: 120000,
   };
   const loadOpts = async () => {
     try { const r = await ext.storage.local.get('cce'); return Object.assign({}, DEF, (r && r.cce) || {}); } catch (e) { return Object.assign({}, DEF); }
@@ -25,14 +25,18 @@
   // @font-face داخل Shadow DOM در کروم کار نمی‌کند و CSP سایت هم ممکن است جلویش را بگیرد،
   // پس از FontFace API روی document استفاده می‌کنیم.
   // کاربر روی هر صفحه‌ی claude.ai همین اسکریپت را دارد، پس فونت فقط وقتی لازم شد (باز شدن پنل یا خروجی) بارگیری می‌شود.
-  let fonts = null, fontsPromise = null;
-  const ensureFonts = () => fontsPromise || (fontsPromise = (async () => {
+  // همین بایت‌ها همراه لوگو در خروجی‌ها هم گذاشته می‌شوند (assets/).
+  let assets = null, assetsPromise = null;
+  const bytesOf = async (path) => new Uint8Array(await (await fetch(ext.runtime.getURL(path))).arrayBuffer());
+  const ensureFonts = () => assetsPromise || (assetsPromise = (async () => {
     try {
       const files = CCE_RENDER.FONT_FILES;
-      const bytes = await Promise.all(files.map(async ([file]) => new Uint8Array(await (await fetch(ext.runtime.getURL('fonts/' + file))).arrayBuffer())));
+      const bytes = await Promise.all(files.map(([file]) => bytesOf('fonts/' + file)));
+      const out = Object.fromEntries(files.map(([file], i) => [file, bytes[i]]));
+      out[CCE_RENDER.LOGO_FILE] = await bytesOf('icons/logo.png');
+      assets = out;
       await Promise.all(files.map(([, weight], i) => new FontFace('Ahang CCE', bytes[i].slice().buffer, { weight: String(weight) }).load().then((f) => document.fonts.add(f))));
-      fonts = Object.fromEntries(files.map(([file], i) => [file, bytes[i]]));
-    } catch (e) { /* بدون فونت هم کار می‌کند؛ Tahoma جایگزین می‌شود */ }
+    } catch (e) { /* بدون فونت و لوگو هم کار می‌کند؛ Tahoma جایگزین می‌شود */ }
   })());
   const currentChatId = () => ((location.pathname.match(/\/chat\/([0-9a-f-]{36})/i) || [])[1]) || null;
 
@@ -59,12 +63,15 @@
   .wrap.dark{--bg:#1d1b19;--soft:#2a2724;--fg:#f0ede8;--mut:#b5b0a8;--line:#3a3632;--ctl:#7a756d;--accT:#ff8a3d;--acc:#ff8a3d;--err:#ff8a80}
   button{font:inherit;cursor:pointer;color:inherit}
   button:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible,.sw input:focus-visible + i{outline:2px solid var(--acc);outline-offset:2px}
-  .fab{width:46px;height:46px;border-radius:50%;border:0;padding:0;background:var(--bg);box-shadow:0 2px 10px rgba(0,0,0,.3);display:grid;place-items:center;position:relative}
+  .fab{-webkit-user-drag:none;user-select:none;width:46px;height:46px;border-radius:50%;border:0;padding:0;touch-action:none;cursor:grab;background:var(--bg);box-shadow:0 2px 10px rgba(0,0,0,.3);display:grid;place-items:center;position:relative}
   .fab .ring{position:absolute;inset:-3px;border-radius:50%;border:3px solid transparent;pointer-events:none}
   .busy .fab .ring{border-color:var(--acc);border-top-color:transparent;animation:spin 1s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   .card{position:absolute;bottom:58px;left:0;width:min(384px,calc(100vw - 32px));max-height:calc(100vh - 90px);overflow:auto;scrollbar-width:thin;background:var(--bg);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.28)}
   .card[hidden]{display:none}
+  .right .card{left:auto;right:0}
+  .top .card{bottom:auto;top:52px}
+  .fab.drag{cursor:grabbing}
   header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
   header .t{flex:1;min-width:0} header b{display:block;font-size:15px;font-weight:600;line-height:1.3} header small{color:var(--mut);font-size:12px}
   .x{border:0;background:none;color:var(--mut);font-size:22px;line-height:1;min-width:32px;min-height:32px;border-radius:6px} .x:hover{background:var(--soft)}
@@ -85,6 +92,15 @@
   .sw input:checked + i{background:var(--acc);border-color:var(--acc)}
   .sw input:checked + i::after{background:#1b1917;transform:translateX(-14px)}
   details.more{margin-top:2px} details.more summary{cursor:pointer;color:var(--mut);font-size:12px;padding:6px 2px}
+.note{margin:12px 0 0;padding:10px 12px;background:var(--soft);border-radius:10px}
+  .note p{margin:0;font-size:12px;line-height:1.8;color:var(--mut)} .note p+p{margin-top:6px}
+  .tools{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 8px}
+  .tools button{border:0;background:none;color:var(--accT);font:inherit;font-size:12px;min-height:28px;padding:2px 6px;border-radius:6px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+  .tools button:hover{background:var(--soft)}
+.pane{border:1px solid var(--line);border-radius:10px;padding:12px;margin:0 0 10px}
+  .pane h3{margin:0 0 4px;font-size:13px;font-weight:600}
+  .pane p{margin:0 0 6px;font-size:12px;line-height:1.8;color:var(--mut)} .pane .ex{color:var(--fg);opacity:.8}
+  .pane .btn{margin-top:4px} .pane .fine{margin:6px 0 0}
   .hint{margin:10px 0 0;color:var(--mut);font-size:12px}
   .msg{margin-top:10px;font-size:12px;color:var(--mut);white-space:pre-line;word-break:break-word} .msg.err{color:var(--err)}
   .chips{display:flex;gap:4px;flex-wrap:wrap;margin:10px 0 8px}
@@ -121,7 +137,7 @@
   @media (prefers-reduced-motion:no-preference){.sw i::after{transition:transform .12s}}
 </style>
 <div class="wrap">
-  <button class="fab" title="Claude Chat Exporter" aria-label="Claude Chat Exporter"><span class="ring"></span></button>
+  <button class="fab" title="Claude Chat Exporter (برای جابه‌جایی بکشید)" aria-label="Claude Chat Exporter"><span class="ring"></span></button>
   <section class="card" hidden>
     <header><span id="hmark"></span><div class="t"><b>Claude Chat Exporter</b><small id="sub"></small></div><button class="x" title="بستن" aria-label="بستن">×</button></header>
     <div class="tabs" id="tabs">
@@ -157,18 +173,38 @@
             <button class="chip" data-sc="none">هیچ‌کدام</button>
           </div>
           <input class="search" id="bsearch" placeholder="جست‌وجو در عنوان…">
+          <div class="tools"><button id="selshown">انتخاب همین فهرست</button><button id="unshown">برداشتن همین فهرست</button><button id="invshown">معکوس</button></div>
           <div class="list" id="blist"></div>
           <div class="cnt" id="bcnt"></div>
           <button class="btn primary" id="bgo"><span id="bgol">پشتیبان‌گیری</span></button>
         </div>
-        <p class="hint">برای هر چت پوشه‌ی جدا + یک index.html قابل‌جست‌وجو ساخته می‌شود. حجم زیاد به چند ZIP تقسیم می‌شود. پشتیبان خودکار در تنظیمات افزونه (آیکون نوار ابزار).</p>
+        <div class="note">
+          <p>هر چت یک پوشه‌ی جدا با index.html قابل‌جست‌وجو می‌گیرد. اگر حجم زیاد شود، خروجی به چند ZIP تقسیم می‌شود.</p>
+          <p>تا پایان کار تب را نبندید. اگر تب در پس‌زمینه باشد، کار ادامه دارد ولی کندتر می‌شود.</p>
+          <p>پشتیبان‌گیری خودکار را از آیکون افزونه در نوار ابزار تنظیم کنید.</p>
+        </div>
         <div class="msg" id="msg2"></div>
       </div>
       <div id="v-import" hidden>
-        <button class="btn secondary" id="imp">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg><span id="impl">ورود ZIP انتقال</span></button>
-        <p class="hint">یک چت جدید باز کنید، ZIP را انتخاب کنید؛ فایل‌ها و پیام آماده می‌شود و فقط Send را می‌زنید.</p>
-        <div class="msg" id="msg3"></div>
+        <section class="pane">
+          <h3>ادامه‌ی یک چت قبلی</h3>
+          <p>ZIP انتقالی که قبلاً از «این چت» گرفته‌اید. گفتگو و فایل‌هایش در چت جدید ادامه پیدا می‌کند.</p>
+          <p class="ex">مثلاً: چت اکانت قدیمی را در اکانت جدید ادامه می‌دهم.</p>
+          <button class="btn secondary" id="imp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg><span id="impl">انتخاب ZIP انتقال</span></button>
+          <div class="msg" id="msg3"></div>
+        </section>
+        <section class="pane">
+          <h3>فرستادن پوشه‌ی پروژه به Claude</h3>
+          <p>پوشه‌ی کدها و فایل‌های شما یک‌جا فشرده می‌شود و در همین چت پیوست می‌شود. فایل‌های اصلی تغییر نمی‌کنند.</p>
+          <p class="ex">مثلاً: می‌خواهم Claude پروژه‌ی <bdi dir="ltr">my-app</bdi> را ببیند.</p>
+          <button class="btn secondary" id="pj">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span id="pjl">انتخاب پوشه</span></button>
+          <div class="opts">${SW('pjclean', 'حذف پوشه‌های قابل‌بازسازی (مثل node_modules)')}</div>
+          <p class="fine">بالای ۳۰ مگابایت، چند ZIP مستقل ساخته می‌شود.</p>
+          <div class="msg" id="msg4"></div>
+          <button class="btn secondary" id="pjdl" hidden>دانلود ZIP ساخته‌شده</button>
+        </section>
       </div>
       <div id="prog" hidden>
         <div class="steps" id="steps"></div>
@@ -206,8 +242,50 @@
       return (0.299 * r + 0.587 * g + 0.114 * b) < 110;
     } catch (e) { return false; }
   };
+  // جای دکمه‌ی گرد: کاربر می‌کشد و هر جا رها کند، به نزدیک‌ترین لبه (چپ یا راست) می‌چسبد.
+  // ممکن است روی محتوای خود سایت بیفتد، برای همین جایش ذخیره می‌شود و کارت پنل هم به سمتی باز می‌شود که جا دارد.
+  let pos = { side: 'left', bottom: 16 };
+  const applyPos = () => {
+    host.style.left = pos.side === 'left' ? '16px' : 'auto';
+    host.style.right = pos.side === 'right' ? '16px' : 'auto';
+    host.style.bottom = pos.bottom + 'px';
+    const top = pos.bottom > window.innerHeight / 2;
+    wrap.classList.toggle('right', pos.side === 'right');
+    wrap.classList.toggle('top', top);
+    card.style.maxHeight = (top ? pos.bottom - 16 : window.innerHeight - pos.bottom - 70) + 'px';
+  };
+  (async () => {
+    try {
+      const r = await ext.storage.local.get('ccePos');
+      if (r && r.ccePos && (r.ccePos.side === 'left' || r.ccePos.side === 'right')) pos = { side: r.ccePos.side, bottom: Math.max(8, Number(r.ccePos.bottom) || 16) };
+    } catch (e) { /* همان جای پیش‌فرض */ }
+    applyPos();
+  })();
+  window.addEventListener('resize', () => { pos.bottom = Math.min(pos.bottom, Math.max(8, window.innerHeight - 54)); applyPos(); });
+
+  const fab = $('.fab');
+  let dragFrom = null, dragged = false;
+  fab.addEventListener('dragstart', (e) => e.preventDefault());
+  fab.addEventListener('pointerdown', (e) => { if (e.button > 0) return; dragFrom = { x: e.clientX, y: e.clientY }; dragged = false; try { fab.setPointerCapture(e.pointerId); } catch (err) { /* بدون capture هم کار می‌کند */ } });
+  fab.addEventListener('pointermove', (e) => {
+    if (!dragFrom) return;
+    if (!dragged && Math.hypot(e.clientX - dragFrom.x, e.clientY - dragFrom.y) < 6) return; // کلیک معمولی را نشکنیم
+    dragged = true;
+    fab.classList.add('drag');
+    pos = { side: e.clientX < window.innerWidth / 2 ? 'left' : 'right', bottom: Math.min(Math.max(8, window.innerHeight - e.clientY - 23), window.innerHeight - 54) };
+    applyPos();
+  });
+  const endDrag = () => {
+    if (!dragFrom) return;
+    dragFrom = null;
+    fab.classList.remove('drag');
+    if (dragged) { try { ext.storage.local.set({ ccePos: pos }); } catch (e) { /* ذخیره نشد؛ فقط تا رفرش می‌ماند */ } }
+  };
+  fab.addEventListener('pointerup', endDrag);
+  fab.addEventListener('pointercancel', endDrag);
+
   const openCard = (v) => { wrap.classList.toggle('dark', isDark()); card.hidden = v === false; if (v !== false) { ensureFonts(); refreshSingle(); } };
-  $('.fab').onclick = () => openCard(card.hidden);
+  fab.onclick = () => { if (dragged) { dragged = false; return; } openCard(card.hidden); };
   $('.x').onclick = () => openCard(false);
 
   const VIEWS = ['single', 'bulk', 'import'];
@@ -237,10 +315,9 @@
 
   const STEPS = {};
   const PP = (() => {
-    let active = null, bulkMode = false;
+    let active = null;
     const setState = (k, st) => { const r = STEPS[k]; if (r) r.className = 'step ' + st; };
     function reset(bulk) {
-      bulkMode = !!bulk;
       const box = $('#steps'); box.textContent = '';
       for (const k in STEPS) delete STEPS[k];
       if (!bulk) {
@@ -320,10 +397,13 @@
     PP.update(text, info || {});
   };
 
-  // فایرفاکس دانلود را باید پس‌زمینه انجام بدهد؛ اگر نشد از لینک موقت استفاده می‌کنیم
+  // در فایرفاکس دانلود از پس‌زمینه انجام می‌شود؛ اگر نشد (یا در کروم) از لینک موقتِ خود صفحه استفاده می‌کنیم
   async function deliver(data, filename) {
     let done = false;
-    if (typeof browser !== 'undefined') {
+    // فایرفاکس بایت‌ها را درست به پس‌زمینه می‌فرستد؛ کروم پیام را JSON می‌کند و برای ZIP صدها مگابایتی
+    // «Could not serialize message» می‌دهد، پس آنجا مستقیم از خود صفحه دانلود می‌کنیم.
+    const isFirefox = typeof browser !== 'undefined' && typeof browser.runtime.getBrowserInfo === 'function';
+    if (isFirefox && alive()) {
       try {
         const r = await browser.runtime.sendMessage({ type: 'download', data, filename });
         done = !!(r && r.ok);
@@ -342,13 +422,23 @@
   // اسم فایل لاتین وسط جمله‌ی فارسی جابه‌جا نمایش داده می‌شد؛ با ایزوله‌ی چپ‌به‌راست درستش می‌کنیم
   const LRI = (s) => '⁦' + s + '⁩';
 
-  async function run(options) {
+  // وقتی افزونه به‌روز یا reload می‌شود، تب‌های باز کپی قدیمی اسکریپت را نگه می‌دارند و
+  // هر تماس با افزونه خطای «Extension context invalidated» می‌دهد. با رفرش صفحه حل می‌شود.
+  const alive = () => { try { return !!(ext.runtime && ext.runtime.id); } catch (e) { return false; } };
+  const STALE = 'افزونه به‌روز شده است. این صفحه‌ی claude.ai را یک‌بار رفرش کنید (F5) و دوباره امتحان کنید.';
+
+  // کروم تبِ پس‌زمینه را کند یا حتی منجمد می‌کند (Memory Saver). نگه داشتن یک Web Lock در طول کار جلوی منجمد شدن را می‌گیرد.
+  const keepAwake = (fn) => (navigator.locks ? navigator.locks.request('cce-running', fn) : fn());
+
+  const run = (options) => keepAwake(() => runChat(options));
+  async function runChat(options) {
+    if (!alive()) throw new Error(STALE);
     if (running) throw new Error('در حال اجرا…');
     running = true;
     PP.reset(false);
     try {
       await ensureFonts();
-      const opts = Object.assign({}, options, { brand: brandOpt(), fonts });
+      const opts = Object.assign({}, options, { brand: brandOpt(), assets });
       const id = currentChatId();
       const st = await getState();
       if (opts.incremental && id && st.chats[id] && st.chats[id].lastMsg) opts.sinceMessageUuid = st.chats[id].lastMsg;
@@ -382,13 +472,14 @@
       running = false;
     }
   }
-  $('#exp').onclick = async () => { try { await run(await loadOpts()); } catch (e) { /* خطا خودش در پنل نشان داده می‌شود */ } };
+  $('#exp').onclick = async () => { try { await run(await loadOpts()); } catch (e) { setMsg('#msg1', e.message, true); } };
 
   let listing = null; // {org, chats}
   const sel = new Set();
-  let scope = 'all';
   const fmtDate = (s) => { try { return new Date(s).toLocaleDateString('fa-IR'); } catch (e) { return ''; } };
   let curProject = null;
+  let shownIds = [];
+  let lastIdx = -1;
 
   const isChanged = (c, st) => { const e = st.chats[c.uuid]; return !e || e.updatedAt !== c.updated_at; };
 
@@ -398,9 +489,20 @@
     const box = $('#blist'); box.textContent = '';
     const frag = document.createDocumentFragment();
     const shown = listing.chats.filter((c) => !q || c.name.toLowerCase().includes(q));
+    shownIds = shown.map((c) => c.uuid);
     for (const c of shown) {
       const r = document.createElement('label'); r.className = 'row';
       const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = sel.has(c.uuid);
+      // Shift+کلیک: همه‌ی چت‌های بین این و آخرین کلیک را هم‌حالت می‌کند
+      cb.onclick = (ev) => {
+        const i = shownIds.indexOf(c.uuid);
+        if (ev.shiftKey && lastIdx >= 0) {
+          const [a, z] = [Math.min(i, lastIdx), Math.max(i, lastIdx)];
+          for (let k = a; k <= z; k++) cb.checked ? sel.add(shownIds[k]) : sel.delete(shownIds[k]);
+          renderList(); return;
+        }
+        lastIdx = i;
+      };
       cb.onchange = () => { cb.checked ? sel.add(c.uuid) : sel.delete(c.uuid); updCount(); };
       const d = document.createElement('div');
       const b = document.createElement('b'); b.textContent = c.name; b.dir = 'auto';
@@ -413,7 +515,6 @@
   }
   function updCount() { $('#bcnt').textContent = `${sel.size} از ${listing.chats.length} چت انتخاب شده`; $('#bgol').textContent = `پشتیبان‌گیری از ${sel.size} چت`; $('#bgo').disabled = !sel.size; }
   async function applyScope(sc) {
-    scope = sc;
     sh.querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x.dataset.sc === sc));
     const st = await getState();
     sel.clear();
@@ -423,6 +524,10 @@
     await renderList();
   }
   sh.querySelectorAll('.chip').forEach((x) => (x.onclick = () => applyScope(x.dataset.sc)));
+  // انتخاب دسته‌ای روی همان چیزی که الان در فهرست دیده می‌شود (بعد از جست‌وجو)
+  $('#selshown').onclick = () => { shownIds.forEach((id) => sel.add(id)); renderList(); };
+  $('#unshown').onclick = () => { shownIds.forEach((id) => sel.delete(id)); renderList(); };
+  $('#invshown').onclick = () => { shownIds.forEach((id) => (sel.has(id) ? sel.delete(id) : sel.add(id))); renderList(); };
   // فهرست ممکن است هزاران چت داشته باشد؛ با هر کلید دوباره نمی‌کشیمش
   let searchTimer = 0;
   $('#bsearch').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderList, 150); };
@@ -442,13 +547,15 @@
     } catch (e) { setMsg('#msg2', e.message, true); }
   };
 
-  async function runBulk(chats, options, opt2 = {}) {
+  const runBulk = (chats, options, opt2 = {}) => keepAwake(() => runMany(chats, options, opt2));
+  async function runMany(chats, options, opt2 = {}) {
+    if (!alive()) throw new Error(STALE);
     if (running) throw new Error('در حال اجرا…');
     running = true;
     PP.reset(true);
     try {
       await ensureFonts();
-      const o = Object.assign({}, options, { brand: brandOpt(), fonts });
+      const o = Object.assign({}, options, { brand: brandOpt(), assets });
       const parts = [];
       const out = await CCE.exportMany({
         fetchFn: (u, x) => fetch(u, x), origin: location.origin, org: opt2.org || listing.org, chats, options: o, onProgress: notify,
@@ -476,7 +583,7 @@
       const chats = listing.chats.filter((c) => sel.has(c.uuid));
       await runBulk(chats, await loadOpts());
       await renderList();
-    } catch (e) { /* خطا خودش در پنل نشان داده می‌شود */ }
+    } catch (e) { setMsg('#msg2', e.message, true); }
   };
 
   // پشتیبان زمان‌بندی‌شده؛ background.js صدایش می‌کند
@@ -601,7 +708,7 @@
     if (pending.i >= k) {
       pending = null;
       setMsg('#msg3', `${batches[i].length} فایل پیوست شد و متن آماده است.\nدکمه‌ی Send را بزنید.`);
-      $('#impl').textContent = 'ورود ZIP انتقال';
+      $('#impl').textContent = 'انتخاب ZIP انتقال';
     } else {
       setMsg('#msg3', `دسته‌ی ${i + 1} از ${k} آماده است.\nSend را بزنید، بعد دوباره دکمه‌ی بالا را بزنید.`);
       $('#impl').textContent = `دسته بعدی (${pending.i + 1} از ${k})`;
@@ -618,6 +725,83 @@
     picker.value = '';
     if (!f) return;
     try { await loadZip(f); await attachNextBatch(); } catch (e) { setMsg('#msg3', e.message, true); }
+  };
+
+  // ---- زیپ‌کردن پوشه‌ی پروژه ----
+  // فقط محتوای فایل‌ها را بدون تغییر می‌خوانیم؛ فشرده‌سازی در makeZip انجام می‌شود (فایل‌های از پیش فشرده مثل png/zip/pdf ذخیره‌ی ساده می‌شوند).
+  const JUNK_DIRS = new Set(['node_modules', '.git', '__pycache__', '.venv', 'venv', '.next', '.nuxt', '.cache', '.idea', '.vscode', '.pytest_cache', '.mypy_cache', '.gradle', 'target']);
+  const JUNK_FILES = /(^|\/)(\.DS_Store|Thumbs\.db|desktop\.ini)$|\.pyc$/;
+  const PART_CAP = 29 * 1048576; // کمی زیر سقف ۳۰ مگابایت claude.ai
+  const fmtMB = (n) => (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + ' MB';
+  const dirPicker = document.createElement('input');
+  dirPicker.type = 'file'; dirPicker.webkitdirectory = true; dirPicker.style.display = 'none';
+  sh.appendChild(dirPicker);
+  // اگر ZIP از سقف بزرگ‌تر شد، فهرست را نصف می‌کنیم تا هر قسمت یک ZIP کامل و مستقل باشد
+  async function packParts(list) {
+    const z = CCE.makeZip();
+    for (const it of list) z.file(it.path, it.bytes);
+    const data = await z.generate();
+    if (data.length <= PART_CAP || list.length < 2) return [{ data, n: list.length }];
+    const mid = list.length >> 1;
+    return [...(await packParts(list.slice(0, mid))), ...(await packParts(list.slice(mid)))];
+  }
+  async function zipFolder(files) {
+    const clean = sh.querySelector('[data-k=pjclean]').checked;
+    const picked = [];
+    let skipped = 0, raw = 0;
+    const skippedWhat = new Set();
+    for (const f of files) {
+      const rel = f.webkitRelativePath || f.name;
+      const parts = rel.split('/');
+      if (clean) {
+        const dir = parts.slice(1, -1).find((d) => JUNK_DIRS.has(d));
+        if (dir || JUNK_FILES.test(rel)) { skipped++; skippedWhat.add(dir || parts[parts.length - 1].replace(/^.*(\.pyc)$/, '*.pyc')); continue; }
+      }
+      picked.push({ path: rel, file: f }); raw += f.size;
+    }
+    if (!picked.length) throw new Error('پوشه خالی است.');
+    if (raw > 1.5 * 1073741824) throw new Error('حجم پوشه بیشتر از ۱٫۵ گیگابایت است؛ مرورگر حافظه‌ی کافی ندارد. پوشه‌های سنگین را کنار بگذارید.');
+    const list = [];
+    for (let i = 0; i < picked.length; i++) {
+      if (i % 25 === 0) { setMsg('#msg4', `در حال خواندن فایل‌ها… ${i} از ${picked.length}`); await sleep(0); }
+      list.push({ path: picked[i].path, bytes: new Uint8Array(await picked[i].file.arrayBuffer()) });
+    }
+    setMsg('#msg4', 'در حال فشرده‌سازی…');
+    const out = await packParts(list);
+    // بازبینی: هر ZIP را دوباره می‌خوانیم و تعداد فایل‌ها و اندازه‌ها را با اصل می‌سنجیم
+    let n = 0, bad = 0;
+    const bySize = new Map(list.map((it) => [it.path, it.bytes.length]));
+    for (const part of out) {
+      const u = await CCE.unzip(part.data);
+      for (const name of u.names) { n++; if ((await u.read(name)).length !== bySize.get(name)) bad++; }
+    }
+    if (n !== list.length || bad) throw new Error('بازبینی ZIP ناموفق بود؛ خروجی ساخته نشد.');
+    return { out, count: list.length, skipped, skippedWhat: [...skippedWhat].slice(0, 6), raw, name: (picked[0].path.split('/')[0] || 'project') };
+  }
+  $('#pj').onclick = () => dirPicker.click();
+  dirPicker.onchange = async () => {
+    const files = [...(dirPicker.files || [])];
+    dirPicker.value = '';
+    if (!files.length) return;
+    $('#pjdl').hidden = true;
+    try {
+      const r = await zipFolder(files);
+      const total = r.out.reduce((a, p) => a + p.data.length, 0);
+      const outFiles = r.out.map((p, i) => new File([p.data], r.out.length > 1 ? `${r.name}-part${i + 1}.zip` : `${r.name}.zip`, { type: 'application/zip' }));
+      const download = () => outFiles.forEach((f) => { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); });
+      const dl = $('#pjdl'); dl.hidden = false; dl.onclick = download;
+      let where;
+      if (findComposer()) {
+        for (let i = 0; i < outFiles.length; i += BATCH) await attachFiles(outFiles.slice(i, i + BATCH));
+        where = 'در کادر پیام پیوست شد.';
+      } else { download(); where = 'کادر پیام پیدا نشد؛ ZIP دانلود شد.'; }
+      setMsg('#msg4', [
+        `ساخته شد: ${r.count} فایل (${fmtMB(r.raw)}) ← ${outFiles.length} ZIP (${fmtMB(total)})`,
+        r.skipped ? `کنار گذاشته شد: ${r.skipped} فایل از ${r.skippedWhat.join('، ')}` : 'هیچ فایلی کنار گذاشته نشد',
+        'بازبینی: همه‌ی فایل‌ها با اصل یکی‌اند',
+        where,
+      ].join('\n'));
+    } catch (e) { setMsg('#msg4', e.message, true); }
   };
 
   document.documentElement.appendChild(host);

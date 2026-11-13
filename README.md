@@ -7,6 +7,7 @@ Unofficial browser extension (Chrome + Firefox) to export your [claude.ai](https
 - **Export one chat or all chats** (or a Project) → folder per chat + searchable `index.html`; big backups split into several ZIPs
 - **Offline HTML reader** (`viewer.html`): search, dark mode, print / save as PDF
 - **Obsidian / Notion Markdown** (`<title>.md` with frontmatter)
+- **Project folder zip** (Import tab): pick a folder, it is compressed in the browser, verified file-by-file, and attached to the message box; split into independent ZIPs above 30 MB
 - **Transfer pack** to continue in another Claude account: context files + ready-to-send handoff message + one-click **Import** (optionally asks Claude for a reusable "project brief")
 - **Incremental export**: only messages after your last export of that chat
 - **Scheduled backup** of new/changed chats (daily/weekly)
