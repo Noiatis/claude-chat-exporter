@@ -6,7 +6,7 @@
     nameFa: 'نویاتیس',
     url: 'https://noiatis.ir/',
     logoFile: 'icons/logo.png',
-    version: '2.8.2',
+    version: '2.8.3',
   };
 
   // لوگو PNG شفاف است و رنگ‌های تیره دارد؛ روی زمینه‌ی تیره گم می‌شد،

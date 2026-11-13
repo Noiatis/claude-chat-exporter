@@ -80,7 +80,7 @@
   }
 
   // نام و وزن فونت‌ها و فایل لوگو؛ content.js و core.js هم از همین‌جا می‌خوانند
-  const FONT_FILES = [['Ahang-Regular.woff2', 400], ['Ahang-DemiBold.woff2', 600]];
+  const FONT_FILES = [['Vazirmatn-Regular.woff2', 400], ['Vazirmatn-SemiBold.woff2', 600]];
   const LOGO_FILE = 'logo.png';
 
   // لوگو کنار فونت در assets/ می‌نشیند؛ بدون assetBase صفحه با Tahoma و بدون لوگو ساخته می‌شود
@@ -101,11 +101,11 @@
     `<header class="mast"><div class="in">${brand && brand.name ? brandLink(brand, `${logoImg(assetBase, 30)}<span>${brandName(brand)}</span>`) : ''}<span class="sp"></span>${tools}</div></header>`;
 
   const BASE_CSS = (assetBase) => `
-${assetBase ? FONT_FILES.map(([f, w]) => `@font-face{font-family:"Ahang";src:url("${assetBase}${f}") format("woff2");font-weight:${w};font-display:swap}`).join('\n') : ''}
+${assetBase ? FONT_FILES.map(([f, w]) => `@font-face{font-family:"Vazirmatn";src:url("${assetBase}${f}") format("woff2");font-weight:${w};font-display:swap}`).join('\n') : ''}
 :root{color-scheme:light;--bg:#fff;--soft:#f4f2ee;--fg:#1b1917;--mut:#5c574f;--line:#e3dfd8;--ctl:#85807a;--accT:#b23a06;--acc:#e8590c;--code:#1b1917;--codefg:#f0ede8;--ink:#1b1917}
 :root.dark{color-scheme:dark;--bg:#1d1b19;--soft:#2a2724;--fg:#f0ede8;--mut:#b5b0a8;--line:#3a3632;--ctl:#7a756d;--accT:#ff8a3d;--acc:#ff8a3d;--code:#141312;--codefg:#f0ede8;--ink:#141312}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:400 15px/1.9 "Ahang",Tahoma,system-ui,sans-serif}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 15px/1.9 "Vazirmatn",Tahoma,system-ui,sans-serif}
 a{color:var(--accT);text-underline-offset:2px}
 :focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .mast{position:sticky;top:0;z-index:5;background:var(--ink);color:#f0ede8;border-bottom:2px solid var(--acc)}

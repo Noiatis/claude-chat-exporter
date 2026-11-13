@@ -3,7 +3,7 @@
 این ریپو آماده‌ی انتشار است: `src/` کد افزونه، `scripts/build.mjs` دو بسته‌ی جدا برای Chrome و Firefox می‌سازد، و workflowهای `.github/workflows` تست، build و Release را خودکار می‌کنند.
 
 ## ۰. پیش از شروع (۱۰ دقیقه)
-1. **لوگو و لینک تیم:** لوگوی نویاتیس (`src/icons/logo.png`) و آدرس `https://noiatis.ir/` (در `src/brand.js`) از قبل گذاشته شده‌اند. برای برند دیگر همین دو را عوض کنید و آیکن‌های `16/48/128.png` را هم از روی لوگوی جدید بسازید. فونت آهنگ داخل `src/fonts/` است و مجوز تجاری فونت‌ایران دارد؛ **قبل از انتشار عمومی مجوزش را بگیرید** (جزئیات در `src/fonts/README.md`). اگر مجوز ندارید، دو فایل woff2 را بردارید تا Tahoma جایگزین شود.
+1. **لوگو و لینک تیم:** لوگوی نویاتیس (`src/icons/logo.png`) و آدرس `https://noiatis.ir/` (در `src/brand.js`) از قبل گذاشته شده‌اند. برای برند دیگر همین دو را عوض کنید و آیکن‌های `16/48/128.png` را هم از روی لوگوی جدید بسازید. فونت وزیرمتن داخل `src/fonts/` است و مجوز آزاد SIL OFL دارد؛ برای انتشار عمومی مشکلی ندارد، فقط فایل `OFL.txt` باید کنار فونت بماند.
 2. **نام در استورها:** چون «Claude» نشان تجاری صاحب آن است، پیشنهاد می‌شود نام استور «Chat Exporter for Claude» باشد و در توضیحات بنویسید «غیررسمی و وابسته به Anthropic نیست» (متن آماده در `STORE_LISTING.md`).
 3. **حریم خصوصی:** `PRIVACY.md` آماده است. برای استور باید یک **آدرس عمومی** از آن داشته باشید: یا لینک فایل در گیت‌هاب، یا GitHub Pages.
 4. **محدودیت‌های منطقه‌ای را زودتر بررسی کنید:** ثبت‌نام توسعه‌دهنده در Chrome Web Store فقط برای فهرست مشخصی از کشورها پذیرفته می‌شود، و گیت‌هاب و استورها ممکن است برای حساب‌ها در مناطق تحت تحریم محدودیت داشته باشند. اگر تیم در چنین منطقه‌ای است، پیش از پرداخت هزینه همین را چک کنید (یا از یک عضو/نهاد در کشور پشتیبانی‌شده استفاده کنید).
@@ -24,7 +24,7 @@ git push -u origin main
 ```bash
 npm install
 npm test && npm run build      # خروجی در dist/
-git tag v2.8.2                 # باید با version در package.json یکی باشد
+git tag v2.8.3                 # باید با version در package.json یکی باشد
 git push origin v2.2.0
 ```
 workflow با نام **Release** دو فایل `claude-chat-exporter-chrome-<نسخه>.zip` و `claude-chat-exporter-firefox-<نسخه>.zip` را به صفحه‌ی Releases اضافه می‌کند. هر کس می‌تواند همین‌ها را دستی نصب کند (بدون استور)، ولی کاربر عادی از استور نصب می‌کند.
@@ -58,7 +58,7 @@ workflow با نام **Release** دو فایل `claude-chat-exporter-chrome-<ن�
 # 1) version را در package.json بالا ببرید (مثلاً 2.3.0)
 npm run version:sync     # manifest و brand.js را هم‌نسخه می‌کند
 npm test && npm run build
-git commit -am "v2.8.2" && git tag v2.8.2 && git push && git push --tags
+git commit -am "v2.8.3" && git tag v2.8.3 && git push && git push --tags
 ```
 
 ## ۷. نکات مهم

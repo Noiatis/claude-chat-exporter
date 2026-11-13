@@ -33,7 +33,7 @@ npm run lint:firefox
 ```
 - برند (نام، سایت، لوگو): `src/brand.js`
 - قواعد ظاهر و دلیل هر انتخاب: [DESIGN.md](DESIGN.md)
-- فونت: آهنگ (فونت‌ایران) داخل `src/fonts/`. مجوز تجاری دارد؛ پیش از انتشار عمومی `src/fonts/README.md` را بخوانید
+- فونت: وزیرمتن (Vazirmatn) داخل `src/fonts/` با مجوز آزاد SIL OFL؛ متن مجوز کنار فایل‌ها در `OFL.txt` است
 - راهنمای انتشار: [PUBLISHING.fa.md](PUBLISHING.fa.md) · حریم خصوصی: [PRIVACY.md](PRIVACY.md) · متن فروشگاه‌ها: [STORE_LISTING.md](STORE_LISTING.md)
 
 ## توجه

@@ -35,7 +35,7 @@
       const out = Object.fromEntries(files.map(([file], i) => [file, bytes[i]]));
       out[CCE_RENDER.LOGO_FILE] = await bytesOf('icons/logo.png');
       assets = out;
-      await Promise.all(files.map(([, weight], i) => new FontFace('Ahang CCE', bytes[i].slice().buffer, { weight: String(weight) }).load().then((f) => document.fonts.add(f))));
+      await Promise.all(files.map(([, weight], i) => new FontFace('Vazirmatn CCE', bytes[i].slice().buffer, { weight: String(weight) }).load().then((f) => document.fonts.add(f))));
     } catch (e) { /* بدون فونت و لوگو هم کار می‌کند؛ Tahoma جایگزین می‌شود */ }
   })());
   const currentChatId = () => ((location.pathname.match(/\/chat\/([0-9a-f-]{36})/i) || [])[1]) || null;
@@ -59,7 +59,7 @@
   :host{all:initial}
   *{box-sizing:border-box}
   .wrap{--bg:#ffffff;--soft:#f4f2ee;--fg:#1b1917;--mut:#5c574f;--line:#e3dfd8;--ctl:#85807a;--accT:#b23a06;--acc:#e8590c;--err:#b3261e;
-    font:400 13px/1.7 "Ahang CCE",Tahoma,system-ui,sans-serif;color:var(--fg);direction:rtl;text-align:right;position:relative}
+    font:400 13px/1.7 "Vazirmatn CCE",Tahoma,system-ui,sans-serif;color:var(--fg);direction:rtl;text-align:right;position:relative}
   .wrap.dark{--bg:#1d1b19;--soft:#2a2724;--fg:#f0ede8;--mut:#b5b0a8;--line:#3a3632;--ctl:#7a756d;--accT:#ff8a3d;--acc:#ff8a3d;--err:#ff8a80}
   button{font:inherit;cursor:pointer;color:inherit}
   button:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible,.sw input:focus-visible + i{outline:2px solid var(--acc);outline-offset:2px}
