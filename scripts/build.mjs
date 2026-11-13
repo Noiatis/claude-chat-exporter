@@ -1,4 +1,4 @@
-// از src/ دو پوشه‌ی dist/chrome و dist/firefox (و zip هر کدام) می‌سازد. بدون وابستگی؛ Node 20 به بالا.
+// Builds dist/chrome and dist/firefox (and a zip of each) from src/. No dependencies; Node 20+.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -20,7 +20,7 @@ if (process.argv.includes('--sync-version')) {
   process.exit(0);
 }
 if (base.version !== pkg.version) {
-  console.error(`نسخه‌ها یکی نیستند: package.json=${pkg.version} src/manifest.json=${base.version}. این را اجرا کنید: npm run version:sync`);
+  console.error(`Versions differ: package.json=${pkg.version} src/manifest.json=${base.version}. Run: npm run version:sync`);
   process.exit(1);
 }
 

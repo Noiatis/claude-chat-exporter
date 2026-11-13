@@ -45,8 +45,8 @@ ext.runtime.onMessage.addListener((m) => {
   if (i.total && !i.bulk) bar.style.width = Math.round(((i.current || 0) / i.total) * 100) + '%';
 });
 
-// اگر تب claude.ai قبل از نصب یا به‌روزرسانی افزونه باز شده باشد، اسکریپت صفحه را ندارد.
-// به‌جای اینکه کاربر مجبور به رفرش شود، همین‌جا تزریقش می‌کنیم.
+// If a claude.ai tab was opened before the extension was installed or updated, it has no content script.
+// Inject it here so the user does not have to reload the page.
 async function claudeTab() {
   const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
   if (!tab || !/^https:\/\/claude\.ai\//.test(tab.url || '')) throw new Error('این تب، claude.ai نیست.');

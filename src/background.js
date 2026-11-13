@@ -2,7 +2,7 @@ const ext = typeof browser !== 'undefined' ? browser : chrome;
 const ALARM = 'cce-backup';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// پشتیبان خودکار چت‌های تازه یا تغییرکرده
+// Automatic backup of new or changed chats
 async function applySchedule() {
   try {
     const r = await ext.storage.local.get('cceSched');
@@ -36,10 +36,10 @@ async function runAuto() {
       created = true;
       await waitLoaded(tab.id);
     }
-    // تب را یادمان می‌ماند تا اگر خودمان باز کرده‌ایم، بعد از پایان کار ببندیمش
+    // Remember the tab so we can close it afterwards if we opened it ourselves
     await ext.storage.local.set({ cceAuto: { tabId: tab.id, created, at: Date.now() } });
     for (let i = 0; i < 40; i++) {
-      try { const r = await ext.tabs.sendMessage(tab.id, { type: 'bulk-run', auto: true }); if (r && r.ok) return; } catch (e) { /* اسکریپت صفحه هنوز بالا نیامده؛ دوباره امتحان می‌کنیم */ }
+      try { const r = await ext.tabs.sendMessage(tab.id, { type: 'bulk-run', auto: true }); if (r && r.ok) return; } catch (e) { /* the content script is not ready yet; retry */ }
       await sleep(1500);
     }
     throw new Error('content script did not respond');
