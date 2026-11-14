@@ -22,14 +22,16 @@ Unofficial browser extension for **Chrome and Firefox** to export your [claude.a
 | 🔁 | **Transfer pack** | Continue in another Claude account: context files, a ready-to-send handoff message and a one-click Import. Can optionally ask Claude for a reusable "project brief". |
 | ➕ | **Incremental export** | Only the messages after your last export of that chat. |
 | ⏰ | **Scheduled backup** | Daily or weekly, only for new or changed chats. |
+| 📂 | **Send a project folder to Claude** | In the Import tab, pick a folder: it is zipped, checked and attached to the chat box. Optionally skips rebuildable folders like `node_modules`. Above 30 MB it makes several independent ZIPs. |
 | 🧩 | **Artifacts and files** | Every artifact version, files Claude created (with later edits applied), uploads and Project instructions. |
 | 🛡️ | **Secret redaction** | Optionally strips API keys and tokens. All your options are remembered. |
+| 🎛️ | **Fine-grained options** | Include or skip Claude's "thinking" and tool details, export all edit/retry branches, and set a token budget (60k / 120k / 170k) for the transfer pack. |
 
 ---
 
 ## 🚀 Install
 
-- 🏪 **Store:** *(link after publishing)*
+- 🏪 **Store:** coming soon
 - 📥 **Manual:** download the zip for your browser from [Releases](../../releases).
   - 🟢 **Chrome:** unzip → `chrome://extensions` → turn on Developer mode → Load unpacked
   - 🦊 **Firefox:** `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → pick `manifest.json`
@@ -42,7 +44,7 @@ A round **Noiatis button** appears at the bottom-left of claude.ai. It has three
 
 1. 💬 **This chat:** export the chat you have open
 2. 🗂️ **All chats:** bulk backup
-3. 📤 **Import:** attach the files and handoff message in the new account
+3. 📤 **Import:** attach the files and handoff message in the new account, or send a project folder to Claude
 
 ⚙️ Scheduled-backup settings live in the toolbar icon's popup.
 
@@ -59,9 +61,9 @@ npm run lint:firefox
 
 - 🎨 Branding (name, site, logo): `src/brand.js`
 - 📐 Design rules and the reasoning behind them: [DESIGN.md](DESIGN.md)
-- 🔤 Font: Ahang by FontIran, **commercial licence**. Read `src/fonts/README.md` before any public release.
+- 🔤 Font: Vazirmatn under the free SIL OFL licence. `OFL.txt` must stay next to the font files (see `src/fonts/README.md`).
 
-📚 **More docs:** [Publishing guide (Persian)](PUBLISHING.fa.md) · [Privacy](PRIVACY.md) · [Store texts](STORE_LISTING.md)
+📚 **More docs:** [Privacy](PRIVACY.md) · [Store texts](docs/STORE_LISTING.md)
 
 ---
 
