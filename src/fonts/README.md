@@ -1,5 +1,5 @@
-# فونت
+# Font
 
-فونت **وزیرمتن** (Vazirmatn)، طراح: صابر راستی‌کردار. دو وزن Regular و SemiBold از بسته‌ی npm با نام `vazirmatn` برداشته شده‌اند.
+**Vazirmatn** by Saber Rastikerdar. Regular and SemiBold weights, taken from the `vazirmatn` npm package.
 
-وزیرمتن با مجوز SIL Open Font License 1.1 منتشر شده و استفاده، توزیع و بسته‌بندی آن (حتی تجاری) آزاد است. متن مجوز در `OFL.txt` کنار فایل‌هاست و باید همراه فونت بماند.
+Vazirmatn is released under the SIL Open Font License 1.1, which allows use, distribution and bundling (commercial use included). The licence text is in `OFL.txt` and must stay next to the font files.

@@ -16,7 +16,7 @@
 - پاک‌سازی اختیاری کلیدها و توکن‌ها. گزینه‌هایی که انتخاب کرده‌اید یادشان می‌ماند.
 
 ## نصب
-- فروشگاه: *(بعد از انتشار لینک می‌گذاریم)*
+- فروشگاه‌ها: به‌زودی
 - دستی: از بخش **Releases** فایل zip مرورگرتان را بگیرید.
   - کروم: از حالت فشرده درآورید، به `chrome://extensions` بروید، Developer mode را روشن کنید و Load unpacked را بزنید.
   - فایرفاکس: `about:debugging#/runtime/this-firefox`، بعد Load Temporary Add-on و انتخاب `manifest.json`.
@@ -31,10 +31,9 @@ npm test             # تست منطق اصلی
 npm run build        # پوشه‌ها و zip کروم و فایرفاکس در dist/
 npm run lint:firefox
 ```
-- برند (نام، سایت، لوگو): `src/brand.js`
 - قواعد ظاهر و دلیل هر انتخاب: [DESIGN.md](DESIGN.md)
 - فونت: وزیرمتن (Vazirmatn) داخل `src/fonts/` با مجوز آزاد SIL OFL؛ متن مجوز کنار فایل‌ها در `OFL.txt` است
-- راهنمای انتشار: [PUBLISHING.fa.md](PUBLISHING.fa.md) · حریم خصوصی: [PRIVACY.md](PRIVACY.md) · متن فروشگاه‌ها: [STORE_LISTING.md](STORE_LISTING.md)
+- حریم خصوصی: [PRIVACY.md](PRIVACY.md)
 
 ## توجه
 وابسته به Anthropic نیست و تأیید آن را ندارد. از آدرس‌های داخلی و مستندنشده‌ی claude.ai استفاده می‌کند که ممکن است بی‌خبر عوض شوند. مجوز: MIT.

@@ -1,4 +1,4 @@
-/* نام، لینک و لوگوی تیم. برای عوض کردن برند فقط همین فایل را ویرایش کنید. */
+/* Team name, link and logo shown in the UI and in exported pages. */
 (function (root) {
   const ext = typeof browser !== 'undefined' ? browser : chrome;
   const BRAND = {
@@ -9,8 +9,8 @@
     version: '2.8.3',
   };
 
-  // لوگو PNG شفاف است و رنگ‌های تیره دارد؛ روی زمینه‌ی تیره گم می‌شد،
-  // برای همین همیشه روی یک کاشی سفید می‌نشیند.
+  // The logo is a transparent PNG with dark colours, so it always sits on a white tile.
+  // This keeps it readable on dark backgrounds.
   function mark(size) {
     const tile = document.createElement('span');
     const pad = Math.max(2, Math.round(size * 0.12));
@@ -21,7 +21,7 @@
     const img = new Image();
     img.alt = '';
     img.setAttribute('aria-hidden', 'true');
-    // تصویر به‌خودیِ خود قابل درگ است؛ درگ بومی مرورگر رویداد pointer را قطع می‌کرد و Claude هم فکر می‌کرد فایل می‌خواهیم آپلود کنیم
+    // Not natively draggable, so it cannot interrupt pointer events on the floating button.
     img.draggable = false;
     img.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;-webkit-user-drag:none;user-select:none';
     img.src = ext.runtime.getURL(BRAND.logoFile);
@@ -29,7 +29,7 @@
     return tile;
   }
 
-  // لینک سایت تیم؛ اگر آدرس خالی باشد فقط نام نشان داده می‌شود.
+  // Site link; if the URL is empty, only the name is shown.
   function link(label) {
     const text = label || BRAND.name;
     if (!BRAND.url) {

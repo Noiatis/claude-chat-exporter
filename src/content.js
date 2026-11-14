@@ -1,11 +1,11 @@
 (() => {
-  // popup ممکن است اسکریپت را دوباره تزریق کند؛ یک نسخه کافی است
+  // The popup may inject the script again; one copy is enough
   if (window.__cceLoaded) return;
   window.__cceLoaded = true;
   const ext = typeof browser !== 'undefined' ? browser : chrome;
   const B = window.CCE_BRAND;
   let running = false;
-  const BATCH = 20; // claude.ai در هر پیام بیشتر از ۲۰ پیوست قبول نمی‌کند
+  const BATCH = 20; // claude.ai accepts at most 20 attachments per message
 
   const DEF = {
     transfer: true, includeProject: true, redact: false, viewer: true, note: false, aiSummary: false, incremental: false,
@@ -21,11 +21,11 @@
   const putState = async (st) => { try { await ext.storage.local.set({ cceState: st }); } catch (e) {} };
   const brandOpt = () => ({ name: B.name, nameFa: B.nameFa, url: B.url });
 
-  // فونت را یک بار می‌خوانیم؛ هم برای خود پنل، هم برای گذاشتن کنار فایل‌های خروجی.
-  // @font-face داخل Shadow DOM در کروم کار نمی‌کند و CSP سایت هم ممکن است جلویش را بگیرد،
-  // پس از FontFace API روی document استفاده می‌کنیم.
-  // کاربر روی هر صفحه‌ی claude.ai همین اسکریپت را دارد، پس فونت فقط وقتی لازم شد (باز شدن پنل یا خروجی) بارگیری می‌شود.
-  // همین بایت‌ها همراه لوگو در خروجی‌ها هم گذاشته می‌شوند (assets/).
+  // Load the font once; used by the panel itself and saved next to exported files.
+  // @font-face inside a Shadow DOM does not work in Chrome and the site CSP may block it,
+  // so we use the FontFace API on the document.
+  // This script runs on every claude.ai page, so the font is only loaded when needed (panel opened or export started).
+  // The same bytes, together with the logo, are written into exports (assets/).
   let assets = null, assetsPromise = null;
   const bytesOf = async (path) => new Uint8Array(await (await fetch(ext.runtime.getURL(path))).arrayBuffer());
   const ensureFonts = () => assetsPromise || (assetsPromise = (async () => {
@@ -36,11 +36,11 @@
       out[CCE_RENDER.LOGO_FILE] = await bytesOf('icons/logo.png');
       assets = out;
       await Promise.all(files.map(([, weight], i) => new FontFace('Vazirmatn CCE', bytes[i].slice().buffer, { weight: String(weight) }).load().then((f) => document.fonts.add(f))));
-    } catch (e) { /* بدون فونت و لوگو هم کار می‌کند؛ Tahoma جایگزین می‌شود */ }
+    } catch (e) { /* works without the font and logo too; Tahoma is used instead */ }
   })());
   const currentChatId = () => ((location.pathname.match(/\/chat\/([0-9a-f-]{36})/i) || [])[1]) || null;
 
-  // متنِ نیمه‌پررنگ را بدون innerHTML می‌سازد (AMO هر innerHTML را رد می‌کند)
+  // Builds semi-bold text without innerHTML (AMO rejects any innerHTML)
   const rich = (el, parts) => {
     el.textContent = '';
     for (const p of parts) {
@@ -49,7 +49,7 @@
     }
   };
 
-  // پنل داخل Shadow DOM است تا CSS خود claude.ai به آن نریزد و برعکس
+  // The panel lives in a Shadow DOM so claude.ai CSS does not leak in and vice versa
   const host = document.createElement('div');
   host.style.cssText = 'all:initial;position:fixed;bottom:16px;left:16px;z-index:2147483647';
   const sh = host.attachShadow({ mode: 'open' });
@@ -242,8 +242,8 @@
       return (0.299 * r + 0.587 * g + 0.114 * b) < 110;
     } catch (e) { return false; }
   };
-  // جای دکمه‌ی گرد: کاربر می‌کشد و هر جا رها کند، به نزدیک‌ترین لبه (چپ یا راست) می‌چسبد.
-  // ممکن است روی محتوای خود سایت بیفتد، برای همین جایش ذخیره می‌شود و کارت پنل هم به سمتی باز می‌شود که جا دارد.
+  // Floating button: the user drags it and on release it snaps to the nearest edge (left or right).
+  // It may cover site content, so its position is saved and the panel card opens towards the side with free space.
   let pos = { side: 'left', bottom: 16 };
   const applyPos = () => {
     host.style.left = pos.side === 'left' ? '16px' : 'auto';
@@ -258,7 +258,7 @@
     try {
       const r = await ext.storage.local.get('ccePos');
       if (r && r.ccePos && (r.ccePos.side === 'left' || r.ccePos.side === 'right')) pos = { side: r.ccePos.side, bottom: Math.max(8, Number(r.ccePos.bottom) || 16) };
-    } catch (e) { /* همان جای پیش‌فرض */ }
+    } catch (e) { /* keep the default position */ }
     applyPos();
   })();
   window.addEventListener('resize', () => { pos.bottom = Math.min(pos.bottom, Math.max(8, window.innerHeight - 54)); applyPos(); });
@@ -266,10 +266,10 @@
   const fab = $('.fab');
   let dragFrom = null, dragged = false;
   fab.addEventListener('dragstart', (e) => e.preventDefault());
-  fab.addEventListener('pointerdown', (e) => { if (e.button > 0) return; dragFrom = { x: e.clientX, y: e.clientY }; dragged = false; try { fab.setPointerCapture(e.pointerId); } catch (err) { /* بدون capture هم کار می‌کند */ } });
+  fab.addEventListener('pointerdown', (e) => { if (e.button > 0) return; dragFrom = { x: e.clientX, y: e.clientY }; dragged = false; try { fab.setPointerCapture(e.pointerId); } catch (err) { /* works without pointer capture too */ } });
   fab.addEventListener('pointermove', (e) => {
     if (!dragFrom) return;
-    if (!dragged && Math.hypot(e.clientX - dragFrom.x, e.clientY - dragFrom.y) < 6) return; // کلیک معمولی را نشکنیم
+    if (!dragged && Math.hypot(e.clientX - dragFrom.x, e.clientY - dragFrom.y) < 6) return; // do not break a normal click
     dragged = true;
     fab.classList.add('drag');
     pos = { side: e.clientX < window.innerWidth / 2 ? 'left' : 'right', bottom: Math.min(Math.max(8, window.innerHeight - e.clientY - 23), window.innerHeight - 54) };
@@ -279,7 +279,7 @@
     if (!dragFrom) return;
     dragFrom = null;
     fab.classList.remove('drag');
-    if (dragged) { try { ext.storage.local.set({ ccePos: pos }); } catch (e) { /* ذخیره نشد؛ فقط تا رفرش می‌ماند */ } }
+    if (dragged) { try { ext.storage.local.set({ ccePos: pos }); } catch (e) { /* not saved; kept only until reload */ } }
   };
   fab.addEventListener('pointerup', endDrag);
   fab.addEventListener('pointercancel', endDrag);
@@ -298,7 +298,7 @@
   sh.querySelectorAll('.tab').forEach((t) => (t.onclick = () => show(t.dataset.tab)));
   const setMsg = (id, t, err) => { const m = $(id); m.textContent = t || ''; m.className = 'msg' + (err ? ' err' : ''); };
 
-  // گزینه‌ها یادشان می‌ماند
+  // Options are remembered
   (async () => {
     const o = await loadOpts();
     sh.querySelectorAll('.sw input').forEach((i) => {
@@ -397,11 +397,11 @@
     PP.update(text, info || {});
   };
 
-  // در فایرفاکس دانلود از پس‌زمینه انجام می‌شود؛ اگر نشد (یا در کروم) از لینک موقتِ خود صفحه استفاده می‌کنیم
+  // On Firefox the download is done by the background script; on failure (or on Chrome) use a temporary link on the page itself
   async function deliver(data, filename) {
     let done = false;
-    // فایرفاکس بایت‌ها را درست به پس‌زمینه می‌فرستد؛ کروم پیام را JSON می‌کند و برای ZIP صدها مگابایتی
-    // «Could not serialize message» می‌دهد، پس آنجا مستقیم از خود صفحه دانلود می‌کنیم.
+    // Firefox passes the bytes to the background script correctly; Chrome serialises messages as JSON and
+    // fails with "Could not serialize message" for ZIPs of hundreds of MB, so there we download directly from the page.
     const isFirefox = typeof browser !== 'undefined' && typeof browser.runtime.getBrowserInfo === 'function';
     if (isFirefox && alive()) {
       try {
@@ -419,15 +419,15 @@
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     }
   }
-  // اسم فایل لاتین وسط جمله‌ی فارسی جابه‌جا نمایش داده می‌شد؛ با ایزوله‌ی چپ‌به‌راست درستش می‌کنیم
+  // Isolate Latin file names with a left-to-right mark so they do not get reordered inside Persian text
   const LRI = (s) => '⁦' + s + '⁩';
 
-  // وقتی افزونه به‌روز یا reload می‌شود، تب‌های باز کپی قدیمی اسکریپت را نگه می‌دارند و
-  // هر تماس با افزونه خطای «Extension context invalidated» می‌دهد. با رفرش صفحه حل می‌شود.
+  // After the extension is updated or reloaded, open tabs keep the old copy of the script and
+  // every call to the extension throws "Extension context invalidated". Reloading the page fixes it.
   const alive = () => { try { return !!(ext.runtime && ext.runtime.id); } catch (e) { return false; } };
   const STALE = 'افزونه به‌روز شده است. این صفحه‌ی claude.ai را یک‌بار رفرش کنید (F5) و دوباره امتحان کنید.';
 
-  // کروم تبِ پس‌زمینه را کند یا حتی منجمد می‌کند (Memory Saver). نگه داشتن یک Web Lock در طول کار جلوی منجمد شدن را می‌گیرد.
+  // Chrome slows down or freezes background tabs (Memory Saver). Holding a Web Lock while working prevents the freeze.
   const keepAwake = (fn) => (navigator.locks ? navigator.locks.request('cce-running', fn) : fn());
 
   const run = (options) => keepAwake(() => runChat(options));
@@ -493,7 +493,7 @@
     for (const c of shown) {
       const r = document.createElement('label'); r.className = 'row';
       const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = sel.has(c.uuid);
-      // Shift+کلیک: همه‌ی چت‌های بین این و آخرین کلیک را هم‌حالت می‌کند
+      // Shift+click: sets every chat between this one and the last click to the same state
       cb.onclick = (ev) => {
         const i = shownIds.indexOf(c.uuid);
         if (ev.shiftKey && lastIdx >= 0) {
@@ -524,11 +524,11 @@
     await renderList();
   }
   sh.querySelectorAll('.chip').forEach((x) => (x.onclick = () => applyScope(x.dataset.sc)));
-  // انتخاب دسته‌ای روی همان چیزی که الان در فهرست دیده می‌شود (بعد از جست‌وجو)
+  // Bulk select on exactly what is shown in the list (after searching)
   $('#selshown').onclick = () => { shownIds.forEach((id) => sel.add(id)); renderList(); };
   $('#unshown').onclick = () => { shownIds.forEach((id) => sel.delete(id)); renderList(); };
   $('#invshown').onclick = () => { shownIds.forEach((id) => (sel.has(id) ? sel.delete(id) : sel.add(id))); renderList(); };
-  // فهرست ممکن است هزاران چت داشته باشد؛ با هر کلید دوباره نمی‌کشیمش
+  // The list may hold thousands of chats; do not re-render it on every keystroke
   let searchTimer = 0;
   $('#bsearch').oninput = () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderList, 150); };
 
@@ -586,7 +586,7 @@
     } catch (e) { setMsg('#msg2', e.message, true); }
   };
 
-  // پشتیبان زمان‌بندی‌شده؛ background.js صدایش می‌کند
+  // Scheduled backup; called by background.js
   async function runAuto() {
     if (running) return { ok: false, error: 'busy' };
     try {
@@ -727,16 +727,16 @@
     try { await loadZip(f); await attachNextBatch(); } catch (e) { setMsg('#msg3', e.message, true); }
   };
 
-  // ---- زیپ‌کردن پوشه‌ی پروژه ----
-  // فقط محتوای فایل‌ها را بدون تغییر می‌خوانیم؛ فشرده‌سازی در makeZip انجام می‌شود (فایل‌های از پیش فشرده مثل png/zip/pdf ذخیره‌ی ساده می‌شوند).
+  // ---- Zip a project folder ----
+  // File contents are read unchanged; compression is done by makeZip (already-compressed files such as png/zip/pdf are stored as is).
   const JUNK_DIRS = new Set(['node_modules', '.git', '__pycache__', '.venv', 'venv', '.next', '.nuxt', '.cache', '.idea', '.vscode', '.pytest_cache', '.mypy_cache', '.gradle', 'target']);
   const JUNK_FILES = /(^|\/)(\.DS_Store|Thumbs\.db|desktop\.ini)$|\.pyc$/;
-  const PART_CAP = 29 * 1048576; // کمی زیر سقف ۳۰ مگابایت claude.ai
+  const PART_CAP = 29 * 1048576; // slightly below the 30 MB limit of claude.ai
   const fmtMB = (n) => (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + ' MB';
   const dirPicker = document.createElement('input');
   dirPicker.type = 'file'; dirPicker.webkitdirectory = true; dirPicker.style.display = 'none';
   sh.appendChild(dirPicker);
-  // اگر ZIP از سقف بزرگ‌تر شد، فهرست را نصف می‌کنیم تا هر قسمت یک ZIP کامل و مستقل باشد
+  // If a ZIP exceeds the cap, halve the list so each part is a complete, independent ZIP
   async function packParts(list) {
     const z = CCE.makeZip();
     for (const it of list) z.file(it.path, it.bytes);
@@ -768,7 +768,7 @@
     }
     setMsg('#msg4', 'در حال فشرده‌سازی…');
     const out = await packParts(list);
-    // بازبینی: هر ZIP را دوباره می‌خوانیم و تعداد فایل‌ها و اندازه‌ها را با اصل می‌سنجیم
+    // Verification: read every ZIP back and compare file count and sizes with the originals
     let n = 0, bad = 0;
     const bySize = new Map(list.map((it) => [it.path, it.bytes.length]));
     for (const part of out) {
