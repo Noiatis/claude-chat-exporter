@@ -1,4 +1,4 @@
-/* ساخت viewer.html، note.md و index.html. توابع خالص‌اند و DOM لازم ندارند. */
+/* Builds viewer.html, note.md and index.html. Pure functions; no DOM required. */
 (function (root) {
   'use strict';
 
@@ -7,7 +7,7 @@
   const safeUrl = (u) => (/^https?:\/\//i.test(u || '') ? u : '');
   const relUrl = (p) => esc(encodeURI(String(p)));
 
-  // مارک‌داون کوچک و امن: همه‌چیز اول escape می‌شود و فقط چند الگوی شناخته‌شده تگ می‌گیرد
+  // Small, safe Markdown: everything is escaped first, then only a few known patterns become tags
   function inline(src) {
     let t = esc(src);
     const codes = [];
@@ -79,11 +79,11 @@
     return out.join('\n');
   }
 
-  // نام و وزن فونت‌ها و فایل لوگو؛ content.js و core.js هم از همین‌جا می‌خوانند
+  // Font names/weights and the logo file; content.js and core.js read them from here too
   const FONT_FILES = [['Vazirmatn-Regular.woff2', 400], ['Vazirmatn-SemiBold.woff2', 600]];
   const LOGO_FILE = 'logo.png';
 
-  // لوگو کنار فونت در assets/ می‌نشیند؛ بدون assetBase صفحه با Tahoma و بدون لوگو ساخته می‌شود
+  // The logo sits next to the fonts in assets/; without assetBase the page uses Tahoma and no logo
   const logoImg = (assetBase, size) =>
     assetBase ? `<span class="mk" style="width:${size}px;height:${size}px"><img src="${esc(assetBase + LOGO_FILE)}" alt="" width="${size}" height="${size}"></span>` : '';
 
@@ -96,7 +96,7 @@
     if (!brand || !brand.name) return '';
     return `<footer class="ft">${brandLink(brand, `${logoImg(assetBase, 22)}<span>${brandName(brand)}</span>`)}<span>خروجی افزونه‌ی Claude Chat Exporter</span></footer>`;
   };
-  // نوار بالای صفحه: لوگو و نام تیم در یک سمت، ابزارها در سمت دیگر
+  // Top bar: logo and team name on one side, tools on the other
   const masthead = (brand, assetBase, tools) =>
     `<header class="mast"><div class="in">${brand && brand.name ? brandLink(brand, `${logoImg(assetBase, 30)}<span>${brandName(brand)}</span>`) : ''}<span class="sp"></span>${tools}</div></header>`;
 
@@ -227,7 +227,7 @@ ${masthead(brand, assetBase, tools)}
 </script></body></html>`;
   }
 
-  // فرمت Obsidian/Notion: frontmatter + لینک نسبی به فایل‌ها
+  // Obsidian/Notion format: frontmatter + relative links to files
   function noteMd(o) {
     const { title, convId, url, created, updated, model, project, views = [], artifacts = [] } = o;
     const q = (s) => JSON.stringify(String(s == null ? '' : s));
@@ -253,7 +253,7 @@ ${masthead(brand, assetBase, tools)}
     return L.join('\n');
   }
 
-  // فهرست قابل‌جست‌وجوی پشتیبان کامل
+  // Searchable index of the full backup
   function indexHtml(o) {
     const { entries = [], brand, title = 'Claude backup', assetBase } = o;
     const msgTotal = entries.reduce((n, e) => n + (e.messages || 0), 0);

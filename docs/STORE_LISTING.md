@@ -41,4 +41,4 @@ Export and back up the user's own claude.ai conversations to files on their comp
 - Category: Tools / Productivity. License: MIT.
 
 ## Screenshots
-Use `store-assets/` (1280×800). Chrome: up to 5 screenshots + 128px icon; promo tile optional.
+Use `docs/store-assets/` (1280×800). Chrome: up to 5 screenshots + 128px icon; promo tile optional.

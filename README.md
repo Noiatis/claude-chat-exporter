@@ -15,7 +15,7 @@ Unofficial browser extension (Chrome + Firefox) to export your [claude.ai](https
 - Optional secret redaction · all options remembered · 100% local, no servers
 
 ## Install / نصب
-- Store: *(link after publishing)*
+- Store listings: coming soon
 - Manual: download the zip for your browser from **Releases**.
   - Chrome: unzip → `chrome://extensions` → Developer mode → Load unpacked
   - Firefox: `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → `manifest.json`
@@ -27,11 +27,11 @@ npm test            # core logic tests
 npm run build       # dist/chrome, dist/firefox + zips
 npm run lint:firefox
 ```
-Branding lives in `src/brand.js` (name, site, logo). The UI uses one bundled font, Vazirmatn (SIL OFL 1.1, see `src/fonts/OFL.txt`), so the panel, popup and exported pages look the same. Design rules and the reasoning behind them: [DESIGN.md](DESIGN.md).
+The UI uses one bundled font, Vazirmatn (SIL OFL 1.1, see `src/fonts/OFL.txt`), so the panel, popup and exported pages look the same. Design rules: [DESIGN.md](DESIGN.md).
 
 فارسی: [README.fa.md](README.fa.md)
 
-Publishing guide (Persian): [PUBLISHING.fa.md](PUBLISHING.fa.md) · Privacy: [PRIVACY.md](PRIVACY.md) · Store texts: [STORE_LISTING.md](STORE_LISTING.md)
+Privacy: [PRIVACY.md](PRIVACY.md)
 
 ## Disclaimer
 Not affiliated with or endorsed by Anthropic. Uses claude.ai's internal, undocumented endpoints, which may change without notice. MIT License.

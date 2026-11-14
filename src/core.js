@@ -75,8 +75,8 @@
     return JSON.stringify(content, null, 2);
   }
 
-  // الگوی کلیدها و توکن‌های رایج؛ فقط وقتی کاربر «پاک‌سازی» را روشن کرده اعمال می‌شود
-  // و چیزی را تضمین نمی‌کند، پس متن مهم را باز هم خودتان نگاه کنید.
+  // Patterns for common keys and tokens; applied only when the user turns redaction on
+  // and it guarantees nothing, so still review important text yourself.
   const SECRET_RES = [
     /sk-ant-[A-Za-z0-9_\-]{20,}/g,
     /sk-[A-Za-z0-9]{32,}/g,
@@ -94,8 +94,8 @@
     return out;
   }
 
-  // کتابخانه‌ی ZIP نمی‌گذاریم تا افزونه سبک بماند و از فروشگاه‌ها راحت‌تر رد شود.
-  // فشرده‌سازی با CompressionStream مرورگر است و اگر نبود، فایل بدون فشرده ذخیره می‌شود.
+  // No ZIP library, to keep the extension small and easy to get through store review.
+  // Compression uses the browser CompressionStream; if it is missing, files are stored uncompressed.
   const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
   function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
 
@@ -289,10 +289,10 @@
       return p;
     };
 
-    // هر چیزی که باید به بسته‌ی انتقال برود: {kind, name, text?, buf?, lang}
+    // Everything that goes into the transfer pack: {kind, name, text?, buf?, lang}
     const items = [];
 
-    // اطلاعات Project مستند رسمی ندارد؛ هر خطایی را رد می‌کنیم و بدون آن ادامه می‌دهیم
+    // Project info has no official documentation; ignore any error and continue without it
     let project = null;
     const projectId = conv.project_uuid || (conv.project && conv.project.uuid);
     if (opt.includeProject && projectId) {
@@ -344,7 +344,7 @@
       return a;
     };
 
-    // فایل‌هایی که ابزار فایلِ خود Claude ساخته یا ویرایش کرده؛ کلید = مسیر اصلی
+    // Files created or edited by Claude's own file tools; key = original path
     const gen = new Map();
     const genZipPath = (p) => 'generated_files/' + String(p).split('/').filter(Boolean).map((x) => sanitize(x, 100)).join('/');
     const norm = (p) => String(p).replace(/\/+/g, '/');
@@ -383,9 +383,9 @@
     }
 
     const downloaded = new Map();
-    // فایل‌هایی که نتوانستیم بگیریم؛ در HANDOFF هم نوشته می‌شود تا Claude در چت جدید بداند چه کم است
+    // Files we could not fetch; also written to HANDOFF so Claude in the new chat knows what is missing
     const missing = [];
-    // فایل‌هایی که Claude با ابزار present_files نشان داده ولی با bash ساخته بود (مثل zip پروژه)؛ متنشان در چت نیست
+    // Files shown by present_files but created with bash (e.g. a project zip); their text is not in the chat
     const remotePresented = new Set();
     const resolveUrl = (p) => (p ? (/^https?:/i.test(p) ? p : origin + p) : null);
     function sniffImageExt(h) {
@@ -404,8 +404,8 @@
       if (isImg) cands.push(f.image_asset && f.image_asset.url, f.preview_url, f.thumbnail_url);
       else cands.push(`/api/organizations/${org}/files/${id}/contents`, `/api/${org}/files/${id}/contents`, f.document_asset && f.document_asset.url);
       cands.push(`/api/organizations/${org}/files/${id}/contents`, `/api/${org}/files/${id}/contents`, f.preview_url, f.thumbnail_url);
-      // فایل‌های «blob» (آپلودهایی که داخل sandbox Claude می‌نشینند: csv، ipynb، zip، …) با آدرس معمول فایل گرفته نمی‌شوند
-      // ولی مسیرشان (/mnt/user-data/uploads/…) را همان مسیرِ دانلود فایل‌های خروجی Claude می‌خواند.
+      // "blob" files (uploads that live in Claude's sandbox: csv, ipynb, zip, ...) cannot be fetched with the usual file URL,
+      // but their path (/mnt/user-data/uploads/...) works with the same download endpoint as Claude output files.
       if (f.path) cands.push(`/api/organizations/${org}/conversations/${convId}/wiggle/download-file?path=${encodeURIComponent(f.path)}`);
       const seenU = new Set();
       for (const c of cands) {
@@ -423,7 +423,7 @@
           const buf = await r.arrayBuffer();
           let fname = name;
           if (!/\.[A-Za-z0-9]{1,5}$/.test(fname)) { const e = extFromMime(ct); if (e) fname += '.' + e; }
-          // claude.ai گاهی تصویر آپلودی را به‌صورت WebP می‌دهد ولی نامش .png است؛ پسوند را با محتوای واقعی یکی می‌کنیم
+          // claude.ai sometimes serves an uploaded image as WebP while the name says .png; make the extension match the real content
           if (isImg) { const real = sniffImageExt(new Uint8Array(buf, 0, Math.min(12, buf.byteLength))); if (real && real !== extOf(fname).replace('jpeg', 'jpg')) fname = fname.replace(/\.[A-Za-z0-9]{1,5}$/, '') + '.' + real; }
           const path = uniq(`files/${fname}`);
           dir.file(path, buf);
@@ -435,7 +435,7 @@
             items.push({ kind: 'upload', name: fname, buf: new Uint8Array(buf) });
           }
           return res;
-        } catch (e) { /* آدرس بعدی را امتحان می‌کنیم */ }
+        } catch (e) { /* try the next URL */ }
       }
       log(`دانلود فایل ناموفق: ${f.file_name} (${id})`);
       missing.push({ name: f.file_name || id, reason: 'download failed' });
@@ -443,7 +443,7 @@
       return null;
     }
 
-    // سه خروجی از یک پیمایش: conversation.md کامل، متن فشرده‌ی انتقال، و بلوک‌های viewer
+    // Three outputs from one walk: full conversation.md, compact transfer text, and viewer blocks
     const md = [];
     const compact = [];
     const views = [];
@@ -558,8 +558,8 @@
       views.push({ n, role, when: when(msg.created_at), blocks: viewBlocks });
     }
 
-    // فایل‌های خروجی Claude (/mnt/user-data/outputs/…) که با bash ساخته شده‌اند.
-    // آدرس دانلودشان مستند نیست؛ چند مسیر را امتحان می‌کنیم و اگر نشد صادقانه گزارش می‌دهیم.
+    // Claude output files (/mnt/user-data/outputs/...) created with bash.
+    // Their download URL is undocumented; try several paths and report honestly if none works.
     for (const p of remotePresented) {
       if (gen.has(p)) continue;
       const base = baseName(p);
@@ -581,7 +581,7 @@
           items.push({ kind: 'upload', name: base, buf: new Uint8Array(buf) });
           ok = true;
           break;
-        } catch (e) { /* مسیر بعدی */ }
+        } catch (e) { /* next path */ }
       }
       if (!ok) { log(`فایل خروجی Claude دانلود نشد: ${base}`); missing.push({ name: base, reason: 'not available for download (Claude output)' }); }
     }
@@ -612,7 +612,7 @@
     const artView = allItems.filter((it) => it.text != null && it.src).map((it) => ({ title: it.name, path: it.src, content: it.text.length <= 200000 ? it.text : null }));
     let noteName = null;
     if (RENDER && opt.viewer) {
-      // در حالت چندچتی فونت و لوگو یک بار در ریشه‌ی ZIP می‌نشیند (exportMany)، نه در هر پوشه
+      // In multi-chat mode the font and logo are written once at the ZIP root (exportMany), not in every folder
       let assetBase = null;
       if (opt.assets) {
         assetBase = shared ? '../assets/' : 'assets/';
@@ -635,10 +635,10 @@
       const tdir = 'transfer/';
       const est = (chars) => Math.ceil(chars / 3);
 
-      // فایل کوچک داخل متن می‌آید، بزرگ‌ها پیوست جدا می‌شوند
+      // Small files go inline in the text; large ones become separate attachments
       const budgetChars = opt.tokenBudget * 3;
       const inlineBlocks = [];
-      const inlineText = []; // {index, it, txt, label}؛ برای کم کردن حجم اگر از سقف گذشت
+      const inlineText = []; // {index, it, txt, label}; used to shrink the size when the cap is exceeded
       const attach = []; // {path, name, bytes, data}
       const skipped = missing.slice();
       const attachUsed = new Set();
@@ -662,8 +662,8 @@
           }
         } else if (it.buf) {
           if (it.buf.byteLength > opt.maxFileBytes) {
-            // claude.ai فایل بزرگ‌تر از ۳۰ مگابایت را نمی‌پذیرد؛ اول zip می‌کنیم (CSV و متن خیلی کوچک می‌شوند)
-            // و اگر باز هم بزرگ بود، تکه‌تکه می‌کنیم تا چیزی از دست نرود.
+            // claude.ai rejects files over 30 MB; zip first (CSV and text shrink a lot)
+            // and if still too large, split into parts so nothing is lost.
             const zipped = makeZip();
             zipped.file(it.name, it.buf);
             const packed = await zipped.generate();
@@ -691,8 +691,8 @@
         }
       }
 
-      // سقف توکن فقط روی پیام‌ها اثر داشت و فایل‌های داخل‌متن آن را بی‌خبر می‌ترکاند.
-      // اگر فایل‌های داخل‌متن بیشتر از نیمی از سقف شدند، بزرگ‌ترین‌ها را پیوست جدا می‌کنیم.
+      // Cap inline files at half of the token budget:
+      // if they exceed it, the largest ones become separate attachments.
       let inlineChars = inlineBlocks.reduce((n, x) => n + x.length, 0);
       for (const c of inlineText.sort((a, b) => b.txt.length - a.txt.length)) {
         if (inlineChars <= budgetChars * 0.5) break;
@@ -817,7 +817,7 @@
     log(`پیام‌ها: ${msgs.length} | فایل‌ها: ${[...downloaded.values()].filter(Boolean).length}/${downloaded.size} | آرتیفکت‌ها: ${artifacts.size} | فایل‌های ساخته‌شده: ${gen.size}`);
     put('export-report.txt', report.join('\n'));
 
-    // هش هر فایل در export-manifest.json تا بعداً بشود سالم بودن ZIP را سنجید
+    // Hash of every file in export-manifest.json so the ZIP can be verified later
     const meta = {
       title, convId, rootName, created: conv.created_at, updated: conv.updated_at, model: conv.model, messages: msgs.length,
       project: project && project.name, viewer: !!(RENDER && opt.viewer), note: noteName, partial,
@@ -832,7 +832,7 @@
       hi++;
       if (hi % 10 === 0) onProgress(`هش فایل ${hi} از ${zip.entries.length}…`, { phase: 'hash', current: hi, total: zip.entries.length });
       let sha = null;
-      try { if (typeof crypto !== 'undefined' && crypto.subtle) sha = toHex(await crypto.subtle.digest('SHA-256', e.data)); } catch (err) { /* هش اختیاری است */ }
+      try { if (typeof crypto !== 'undefined' && crypto.subtle) sha = toHex(await crypto.subtle.digest('SHA-256', e.data)); } catch (err) { /* the hash is optional */ }
       man.push({ path: e.path.slice(rootName.length + 1), bytes: e.data.length, sha256: sha });
     }
     dir.file('export-manifest.json', JSON.stringify({ title, convId, exportedAt: new Date().toISOString(), files: man }, null, 2));
@@ -844,7 +844,7 @@
     return { data, filename: `${rootName}_${date}${partial ? '_new' : ''}.zip`, report, stats, meta, counts: meta.counts, lastMessageUuid: meta.lastMessageUuid, updatedAt: conv.updated_at, convId };
   }
 
-  // GET ساده‌ی JSON با کوکی نشست؛ هر دو مسیر (خروجی یک چت و فهرست چت‌ها) از همین استفاده می‌کنند
+  // Plain JSON GET with the session cookie; used by both single-chat export and chat listing
   const makeGetJson = (fetchFn, origin) => async (url) => {
     const r = await fetchFn(origin + url, { credentials: 'include', headers: { Accept: 'application/json' } });
     if (!r.ok) throw new Error(r.status + ' ' + url);
@@ -879,8 +879,8 @@
     throw new Error('فهرست چت‌ها خوانده نشد: ' + (lastErr && lastErr.message));
   }
 
-  // چند چت در یک ZIP (یا چند ZIP با سقف حجم) همراه index.html قابل‌جست‌وجو.
-  // مرورگرها با ZIP چند صد مگابایتی در حافظه به مشکل می‌خورند، برای همین تکه‌تکه می‌شود.
+  // Several chats in one ZIP (or several ZIPs under a size cap) with a searchable index.html.
+  // Browsers struggle with ZIPs of hundreds of MB in memory, hence the split.
   async function exportMany(deps) {
     const { fetchFn, origin, org, chats, options = {}, onProgress = () => {}, onPart, maxZipBytes = 450 * 1024 * 1024 } = deps;
     const date = new Date().toISOString().slice(0, 10);
@@ -922,7 +922,7 @@
         failed.push({ chat, error: err && err.message });
         onProgress(`چت «${chat.name}» ناموفق بود: ${err && err.message}`, { log: true });
       }
-      // مکث کوتاه بین چت‌ها لازم نیست و در تبِ پس‌زمینه کروم تایمرها را تا یک دقیقه کند می‌کند؛ فقط به حلقه‌ی رویداد نفس می‌دهیم
+      // No pause between chats: Chrome throttles timers in background tabs by up to a minute; just yield to the event loop
       await Promise.resolve();
     }
     await flush(true);

@@ -1,60 +1,60 @@
 # DESIGN.md
 
-راهنمای طراحی افزونه. هر انتخاب یک دلیل دارد؛ اگر دلیلش را نتوانستید بنویسید، حذفش کنید.
-(این سند بر اساس روش [anti-slop](https://github.com/miqdadbadjuber/anti-slop) نوشته شده.)
+Design notes for the extension. Every choice has a reason; if you cannot write the reason, remove the choice.
+(Written following the [anti-slop](https://github.com/miqdadbadjuber/anti-slop) method.)
 
-**Design Read:** پنل کاربردی داخل مرورگر برای کسی که می‌خواهد چت‌های Claude را نگه دارد یا به اکانت دیگر ببرد. فارسی‌زبان، عجله‌ای، وسط کار. سبک: آرام و ابزاری.
+**Design read:** a practical panel inside the browser for someone who wants to keep their Claude chats or move them to another account. Persian-speaking, in a hurry, in the middle of work. Style: calm and tool-like.
 
-**Dial:** ENERGY 1 / RHYTHM 1 / MOTION 1
+**Dials:** ENERGY 1 / RHYTHM 1 / MOTION 1
 
-## رنگ
-هویت از خود لوگوی نویاتیس آمده: روبان زغالی و جرقه‌ی نارنجی. نتیجه: زمینه و متن خنثی، یک رنگ تأکید.
+## Colour
+The identity comes from the Noiatis logo itself: a charcoal ribbon and an orange spark. Result: neutral background and text, one accent colour.
 
-| نقش | روشن | تیره | چرا این مقدار |
+| Role | Light | Dark | Why this value |
 |---|---|---|---|
-| زمینه | `#ffffff` / `#f4f2ee` | `#1d1b19` / `#2a2724` | سفید گرم، نه خاکستری سرد |
-| متن | `#1b1917` | `#f0ede8` | کنتراست ۱۷٫۵ و ۱۴٫۷ به ۱ |
-| متن کم‌رنگ | `#5c574f` | `#b5b0a8` | ۷٫۲ و ۸٫۰ به ۱؛ از ۴٫۵ بالاتر است |
-| کادر کنترل‌ها | `#85807a` | `#7a756d` | ۳٫۹ و ۳٫۸ به ۱؛ حداقل ۳ لازم است |
-| خط جداکننده | `#e3dfd8` | `#3a3632` | فقط تزئینی است، پس کنتراست لازم ندارد |
-| تأکید (متن و لینک) | `#b23a06` | `#ff8a3d` | ۶٫۰ و ۷٫۳ به ۱ |
-| تأکید (پر کردن) | `#e8590c` | `#ff8a3d` | ۳٫۶ به ۱ برای شکل‌ها؛ **روی آن متن سفید نمی‌گذاریم** |
+| Background | `#ffffff` / `#f4f2ee` | `#1d1b19` / `#2a2724` | warm white, not cold grey |
+| Text | `#1b1917` | `#f0ede8` | contrast 17.5:1 and 14.7:1 |
+| Muted text | `#5c574f` | `#b5b0a8` | 7.2:1 and 8.0:1; above the 4.5 minimum |
+| Control border | `#85807a` | `#7a756d` | 3.9:1 and 3.8:1; 3 is required |
+| Divider | `#e3dfd8` | `#3a3632` | decorative only, so no contrast needed |
+| Accent (text, links) | `#b23a06` | `#ff8a3d` | 6.0:1 and 7.3:1 |
+| Accent (fill) | `#e8590c` | `#ff8a3d` | 3.6:1 for shapes; **no white text on it** |
 
-همه‌ی نسبت‌ها با فرمول WCAG محاسبه شده‌اند، نه با چشم.
+All ratios are computed with the WCAG formula, not by eye.
 
-**تأکید فقط در سه جا:** نوار پیشرفت، کلید روشن و حلقه‌ی فوکوس. دکمه‌ی اصلی مشکی (رنگ متن) است، نه نارنجی، چون متن سفید روی نارنجی به ۴٫۵ نمی‌رسد و چون نارنجی باید کمیاب بماند.
+**Accent is used in three places only:** the progress bar, the switch when on, and the focus ring. The primary button is black (text colour), not orange: white text on orange does not reach 4.5, and orange has to stay rare.
 
-## فونت
-فقط **وزیرمتن** (Vazirmatn، مجوز OFL) برای فارسی و لاتین، تا همه‌ی صفحه‌ها (پنل، popup، مرورگر آفلاین، فهرست پشتیبان) یک صدا داشته باشند. فایل‌ها داخل افزونه‌اند و از جایی بارگیری نمی‌شوند. وزن‌ها: ۴۰۰ برای متن، ۶۰۰ برای عنوان‌ها (بقیه‌ی وزن‌ها را نمی‌آوریم تا حجم کم بماند). این فونت مجوز تجاری دارد؛ نگاه کنید به `src/fonts/README.md`. اندازه‌ها: ۱۲ / ۱۳ / ۱۵ / ۱۸. اگر فونت لود نشد: Tahoma، بعد فونت سیستم.
+## Font
+Only **Vazirmatn** (SIL OFL 1.1) for Persian and Latin, so every surface (panel, popup, offline viewer, backup index) speaks with one voice. The files ship inside the extension and nothing is loaded from the network. Weights: 400 for text, 600 for headings (no other weights, to keep the size small). Sizes: 12 / 13 / 15 / 18. Fallback if the font fails to load: Tahoma, then the system font.
 
-## شکل
-- گوشه‌ها فقط دو اندازه دارند: ۶px برای کنترل‌ها و ۱۰px برای پنل.
-- سایه فقط یک‌جا: خود پنل شناور و دکمه‌ی گرد، چون روی صفحه‌ی دیگری شناورند. هیچ چیز دیگری سایه ندارد.
-- بدون گرادیان، درخشش (glow)، شیشه‌ای، کپسول، نوار رنگی کنار کارت، یا ایموجی در متن. جای ایموجی کلمه است.
-- آیکن فقط جایی که چیزی را روشن‌تر می‌کند: تیک و ضربدر مراحل. بقیه‌ی دکمه‌ها متن‌اند.
+## Shape
+- Only two corner radii: 6px for controls and 10px for the panel.
+- One shadow level: the floating panel and the round button, since they float over another page. Nothing else has a shadow.
+- No gradients, glow, glass effects, pills, coloured side bars on cards, or emoji in text. Words replace emoji.
+- Icons only where they make something clearer: the check and cross of the steps. Other buttons are text.
 
-## ریتم و چیدمان
-- یک نقطه‌ی تمرکز در هر صفحه: دکمه‌ی اصلی. بقیه تابع آن‌اند.
-- پنل چیدمان قالبی «کارت‌های هم‌اندازه» ندارد؛ فهرست‌ها ردیفی‌اند و بین ردیف‌ها فقط خط نازک است.
-- مرورگر آفلاین مثل یک سند خواندنی چیده شده، نه مثل کارت‌های شناور.
+## Rhythm and layout
+- One focal point per screen: the primary button. Everything else follows it.
+- The panel does not use a template "grid of equal cards"; lists are rows separated by thin lines.
+- The offline viewer is laid out like a readable document, not like floating cards.
 
-## حرکت
-- فقط وقتی کاری در جریان است: یک چرخنده‌ی کوچک کنار مرحله‌ی فعال و حلقه‌ی دکمه‌ی گرد.
-- بدون انیمیشن ورود، بدون حلقه‌ی بی‌پایان روی چیز ثابت.
-- اگر کاربر `prefers-reduced-motion` را روشن کرده باشد، چرخنده نمی‌چرخد و فقط نقطه می‌ماند.
+## Motion
+- Only while something is running: a small spinner next to the active step and a ring on the round button.
+- No entrance animations and no endless loops on static elements.
+- With `prefers-reduced-motion`, the spinner does not spin and only the dot remains.
 
-## دسترس‌پذیری
-- نشانگر فوکوس همیشه دیده می‌شود (حلقه‌ی ۲px با رنگ تأکید).
-- هیچ وضعیتی فقط با رنگ نشان داده نمی‌شود: «تیک/ضربدر» و کلمه هم هست.
-- لینک‌ها زیرخط دارند.
-- اهداف کلیک حداقل ۳۲px ارتفاع.
+## Accessibility
+- The focus indicator is always visible (2px ring in the accent colour).
+- No state is shown by colour alone: there is a check or cross, and a word.
+- Links are underlined.
+- Click targets are at least 32px tall.
 
-## متن
-- جمله‌های کوتاه و مشخص. بدون «به‌راحتی»، «قدرتمند»، «بی‌دردسر».
-- خطاها بگویند چه شد و حالا چه کنیم.
-- عدد یا آمار ساختگی نداریم؛ هرچه نشان می‌دهیم از خود چت شمرده شده.
+## Copy
+- Short, specific sentences. No "easily", "powerful", "effortless".
+- Errors say what happened and what to do now.
+- No invented numbers or statistics; everything shown is counted from the chat itself.
 
-## چیزهایی که عمداً نیست
-- حالت «Pro» یا نشان «جدید/AI» تزئینی. (نشان «جدید/تغییرکرده» کنار چت‌ها وضعیت واقعی است و می‌ماند.)
-- آمار نمایشی و نمودار.
-- متن بازاریابی داخل خود افزونه.
+## Deliberately absent
+- A "Pro" mode or decorative "new/AI" badges. (The "new/changed" marker next to chats is a real status and stays.)
+- Vanity statistics and charts.
+- Marketing text inside the extension.

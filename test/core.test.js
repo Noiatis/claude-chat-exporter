@@ -1,4 +1,4 @@
-// اجرا: node test/core.test.js  (Node 20 به بالا)
+// Run: node test/core.test.js  (Node 20+)
 const assert = require('assert');
 const CCE = require('../src/core.js');
 const R = require('../src/render.js');
@@ -30,11 +30,11 @@ const fetchFn = async (url) => {
 const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.find(pred)));
 
 (async () => {
-  // تبدیل مارک‌داون نباید HTML خام رد کند
+  // Markdown conversion must not pass raw HTML through
   const h = R.mdToHtml('<img src=x onerror=1> **b** `<i>`');
   assert(!h.includes('<img'), 'html must be escaped');
 
-  // خروجی تکی: viewer و note
+  // Single export: viewer and note
   let res = await CCE.exportChat({ fetchFn, origin: 'https://claude.ai', pathname: '/chat/' + mkId(1), options: { note: true, brand: { name: 'Noiatis', nameFa: 'نویاتیس', url: 'https://example.com' } } });
   let z = await CCE.unzip(res.data);
   const viewer = await read(z, (n) => n.endsWith('/viewer.html'));
@@ -45,7 +45,7 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   assert(note.startsWith('---\ntitle:') && note.includes('tags: [claude-chat]'));
   assert.strictEqual(res.lastMessageUuid, 'c1m3');
 
-  // خروجی افزایشی
+  // Incremental export
   res = await CCE.exportChat({ fetchFn, origin: 'https://claude.ai', pathname: '/chat/' + mkId(1), options: { sinceMessageUuid: 'c1m1' } });
   assert(res.filename.endsWith('_new.zip'));
   z = await CCE.unzip(res.data);
@@ -53,12 +53,12 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   assert.strictEqual(res.meta.messages, 2);
   await assert.rejects(CCE.exportChat({ fetchFn, origin: 'https://claude.ai', pathname: '/chat/' + mkId(1), options: { sinceMessageUuid: 'c1m3' } }), /NOTHING_NEW/);
 
-  // پرامپت خلاصه‌ی پروژه
+  // Project summary prompt
   res = await CCE.exportChat({ fetchFn, origin: 'https://claude.ai', pathname: '/chat/' + mkId(2), options: { aiSummary: true } });
   z = await CCE.unzip(res.data);
   assert((await read(z, (n) => n.endsWith('transfer/HANDOFF.md'))).includes('reusable project brief'));
 
-  // فهرست و خروجی گروهی (سقف حجم ۱ بایت تا چند تکه شود)
+  // Chat list and bulk export (1-byte cap forces several parts)
   const { org, chats } = await CCE.listChats({ fetchFn, origin: 'https://claude.ai', cookie: '' });
   assert.strictEqual(chats.length, 3);
   assert.strictEqual(chats[0].name, 'چت 3'); // newest first
@@ -72,7 +72,7 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   const idx = await read(zb, (n) => n === 'index.html');
   assert(idx.includes('viewer.html'));
 
-  // فونت و لوگو: یک بار در ریشه‌ی ZIP، نه تکرار در هر چت
+  // Font and logo: once at the ZIP root, not repeated per chat
   const assets = { 'Vazirmatn-Regular.woff2': new Uint8Array([1, 2]), 'Vazirmatn-SemiBold.woff2': new Uint8Array([3, 4]), 'logo.png': new Uint8Array([5]) };
   const withFont = [];
   await CCE.exportMany({ fetchFn, origin: 'https://claude.ai', org, chats, options: { assets }, onPart: async (p) => withFont.push(p) });
@@ -85,7 +85,7 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   assert(z.names.some((n) => n.endsWith('/assets/Vazirmatn-SemiBold.woff2')));
   assert((await read(z, (n) => n.endsWith('/viewer.html'))).includes('assets/logo.png'), 'logo in viewer');
 
-  // فایل خروجی Claude که با bash ساخته شده: اگر دانلود شد ذخیره شود، اگر نشد در HANDOFF بیاید
+  // Claude output file created with bash: saved if downloadable, otherwise listed in HANDOFF
   const pc = mkConv(4);
   pc.chat_messages[1].content.push({ type: 'tool_use', name: 'present_files', input: { filepaths: ['/mnt/user-data/outputs/ok.zip', '/mnt/user-data/outputs/gone.zip'] } });
   const pf = async (url, o) => {
@@ -100,7 +100,7 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   assert(!z.names.some((n) => n.endsWith('/outputs/gone.zip')));
   assert((await read(z, (n) => n.endsWith('transfer/HANDOFF.md'))).includes('gone.zip'), 'missing file listed in HANDOFF');
 
-  // آپلود از نوع blob: آدرس معمول فایل ۴۰۴ می‌دهد ولی مسیر sandbox جواب می‌دهد
+  // Blob upload: the usual file URL returns 404 but the sandbox path works
   const bc = mkConv(5);
   bc.chat_messages[0].files = [{ file_kind: 'blob', file_uuid: 'b-1', file_name: 'data.csv', path: '/mnt/user-data/uploads/data.csv' }];
   const bf = async (url, o) => {
@@ -112,7 +112,7 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   z = await CCE.unzip(res.data);
   assert(z.names.some((n) => n.endsWith('/files/data.csv')), 'blob upload saved via sandbox path');
 
-  // فایل بزرگ: اگر فشرده شد zip، اگر نشد تکه‌تکه؛ هیچ‌کدام رد نشود
+  // Big file: zipped if possible, otherwise split; none is skipped
   const big = mkConv(6);
   big.chat_messages[0].files = [
     { file_kind: 'blob', file_uuid: 'z-1', file_name: 'zeros.bin', path: '/mnt/user-data/uploads/zeros.bin' },
@@ -132,7 +132,7 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   const man = JSON.parse(await read(z, (n) => n.endsWith('transfer/manifest.json')));
   assert(man.skipped.length === 0, 'nothing skipped');
 
-  // تصویر WebP با نام .png باید پسوند درست بگیرد
+  // A WebP image named .png must get the right extension
   const wc = mkConv(8);
   wc.chat_messages[0].files = [{ file_kind: 'image', file_uuid: 'w-1', file_name: 'shot.png', preview_url: '/img/w1' }];
   const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 4, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
@@ -145,7 +145,7 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   z = await CCE.unzip(res.data);
   assert(z.names.some((n) => n.endsWith('/files/shot.webp')) && !z.names.some((n) => n.endsWith('/files/shot.png')), 'webp renamed');
 
-  // ایموجی در خروجی نباید باشد
+  // No emoji in the output
   const md1 = await read(z, (n) => n.endsWith('/conversation.md'));
   assert(!/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(md1), 'no emoji in conversation.md');
   for (const p of got) assert(p.data.length > 100);
