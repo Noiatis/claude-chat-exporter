@@ -6,7 +6,7 @@
     nameFa: 'نویاتیس',
     url: 'https://noiatis.ir/',
     logoFile: 'icons/logo.png',
-    version: '2.8.3',
+    version: '2.9.0',
   };
 
   // The logo is a transparent PNG with dark colours, so it always sits on a white tile.
