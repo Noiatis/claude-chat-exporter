@@ -1,6 +1,6 @@
 /*
- * منطق اصلی: خواندن چت از API خود claude.ai و ساختن ZIP.
- * بدون وابستگی به DOM است تا همین فایل در Node هم تست شود.
+ * Core logic: reads chats from claude.ai's own API and builds the ZIP.
+ * It has no DOM dependency, so the same file is unit-tested in Node.
  */
 (function (root) {
   'use strict';
@@ -109,8 +109,7 @@
   }
 
   // Token estimate. Persian/Arabic script costs about 0.6 token per character, Latin and code about 0.3,
-  // other scripts and emoji about 0.8. Measured against real exports this is within ~10%,
-  // while the old "characters / 3" rule under-counted Persian chats by roughly 25%.
+  // other scripts and emoji about 0.8. It is an estimate (roughly +/-10%), not an exact count.
   function estTok(s) {
     let t = 0;
     for (let i = 0; i < s.length; i++) {
