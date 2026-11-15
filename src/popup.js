@@ -10,22 +10,22 @@ $('sub').textContent = `${B.name} · نسخه ${B.version}`;
 $('fname').textContent = B.nameFa || B.name;
 $('flink').appendChild(B.link('noiatis.ir'));
 
-const DEF = { transfer: true, includeProject: true, redact: false, viewer: true, note: false, aiSummary: false, incremental: false, includeThinking: true, includeToolOutput: true, allBranches: false, tokenBudget: 120000 };
-const MAP = { transfer: 'transfer', viewer: 'viewer', note: 'note', aiSummary: 'aiSummary', incremental: 'incremental', project: 'includeProject', redact: 'redact', think: 'includeThinking', tools: 'includeToolOutput', branches: 'allBranches' };
-
-const readOpts = () => { const o = { tokenBudget: Number($('budget').value) }; for (const id in MAP) o[MAP[id]] = $(id).checked; return o; };
-const saveAll = async () => { try { await ext.storage.local.set({ cce: readOpts() }); } catch (e) {} };
+const O = window.CCE_OPTS;
+const DEF = O.defaults();
+let vals = Object.assign({}, DEF);
+const saveAll = async () => { try { const r = await ext.storage.local.get('cce'); await ext.storage.local.set({ cce: Object.assign({}, r.cce || {}, vals) }); } catch (e) {} };
+const readOpts = () => Object.assign({}, vals);
 
 (async () => {
   let o = DEF, sched = 'off', last = null;
   try {
     const r = await ext.storage.local.get(['cce', 'cceSched', 'cceState']);
     o = Object.assign({}, DEF, r.cce || {});
+    vals = Object.assign({}, o);
     sched = (r.cceSched && r.cceSched.every) || 'off';
     last = r.cceState && r.cceState.lastBackup;
   } catch (e) {}
-  for (const id in MAP) { $(id).checked = !!o[MAP[id]]; $(id).onchange = saveAll; }
-  $('budget').value = String(o.tokenBudget); $('budget').onchange = saveAll;
+  O.build($('opts'), () => true, vals, (k, v) => { vals[k] = v; saveAll(); }, true);
   $('sched').value = sched;
   $('sched').onchange = async () => {
     try { await ext.storage.local.set({ cceSched: { every: $('sched').value } }); await ext.runtime.sendMessage({ type: 'schedule' }); } catch (e) {}
@@ -53,7 +53,7 @@ async function claudeTab() {
   try {
     await ext.tabs.sendMessage(tab.id, { type: 'ping' });
   } catch (e) {
-    await ext.scripting.executeScript({ target: { tabId: tab.id }, files: ['render.js', 'core.js', 'brand.js', 'content.js'] });
+    await ext.scripting.executeScript({ target: { tabId: tab.id }, files: ['render.js', 'core.js', 'options.js', 'brand.js', 'content.js'] });
   }
   return tab;
 }

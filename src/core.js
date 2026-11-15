@@ -94,6 +94,67 @@
     return out;
   }
 
+  // Phone numbers (Iranian mobiles in Latin or Persian digits, and +international) and e-mail addresses.
+  // Like redactText this is best-effort; review important text yourself.
+  const D = '[0-9\u06F0-\u06F9]';
+  const PII_RES = [
+    [/[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}/g, '[EMAIL]'],
+    [new RegExp(`(?<!${D})(?:\\+98|0098|98|[0\\u06F0])?[\\s-]?[9\\u06F9]${D}{2}[\\s-]?${D}{3}[\\s-]?${D}{4}(?!${D})`, 'g'), '[PHONE]'],
+    [new RegExp(`(?<![\\w+])\\+\\d{1,3}[\\s.-]?\\(?\\d{1,4}\\)?(?:[\\s.-]?\\d{2,4}){2,4}(?!\\d)`, 'g'), '[PHONE]'],
+  ];
+  function redactPII(s) {
+    let out = s;
+    for (const [re, to] of PII_RES) out = out.replace(re, to);
+    return out;
+  }
+
+  // Token estimate. Persian/Arabic script costs about 0.6 token per character, Latin and code about 0.3,
+  // other scripts and emoji about 0.8. Measured against real exports this is within ~10%,
+  // while the old "characters / 3" rule under-counted Persian chats by roughly 25%.
+  function estTok(s) {
+    let t = 0;
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      t += c < 128 ? 0.3 : (c >= 0x600 && c <= 0x6FF) || (c >= 0xFB50 && c <= 0xFEFF) ? 0.6 : c === 0x200C ? 0.1 : 0.8;
+    }
+    return Math.ceil(t);
+  }
+  // Image size from the file header (png, jpeg, gif, webp); Claude scales images down so the cost is capped near 1600 tokens
+  function imageDims(h) {
+    const dv = new DataView(h.buffer, h.byteOffset, h.byteLength);
+    try {
+      if (h[0] === 0x89 && h[1] === 0x50) return [dv.getUint32(16), dv.getUint32(20)];
+      if (h[0] === 0x47 && h[1] === 0x49) return [dv.getUint16(6, true), dv.getUint16(8, true)];
+      if (h[0] === 0x52 && h[8] === 0x57) {
+        const k = String.fromCharCode(h[12], h[13], h[14], h[15]);
+        if (k === 'VP8X') return [1 + (h[24] | (h[25] << 8) | (h[26] << 16)), 1 + (h[27] | (h[28] << 8) | (h[29] << 16))];
+        if (k === 'VP8 ') return [dv.getUint16(26, true) & 0x3fff, dv.getUint16(28, true) & 0x3fff];
+        if (k === 'VP8L') { const b = dv.getUint32(21, true); return [(b & 0x3fff) + 1, ((b >> 14) & 0x3fff) + 1]; }
+      }
+      if (h[0] === 0xff && h[1] === 0xd8) {
+        for (let i = 2; i + 9 < h.length;) {
+          if (h[i] !== 0xff) { i++; continue; }
+          const m = h[i + 1];
+          if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return [dv.getUint16(i + 7), dv.getUint16(i + 5)];
+          i += 2 + dv.getUint16(i + 2);
+        }
+      }
+    } catch (e) { /* unknown size */ }
+    return null;
+  }
+  function binTok(name, u8) {
+    const ext = extOf(name);
+    if (/^(png|jpe?g|gif|webp)$/.test(ext)) {
+      const d = imageDims(u8.subarray(0, Math.min(u8.length, 65536)));
+      return d && d[0] && d[1] ? Math.min(1600, Math.ceil((d[0] * d[1]) / 750)) : 1200;
+    }
+    if (ext === 'pdf') return Math.min(90000, Math.ceil(u8.length / 45));
+    if (/^(docx|xlsx|pptx)$/.test(ext)) return Math.min(60000, Math.ceil(u8.length / 15));
+    return 0;
+  }
+  const isMediaName = (n) => /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus|mp4|mov|webm|mkv|avi|m4v)$/i.test(n);
+  const isImageName = (n) => /\.(png|jpe?g|gif|webp)$/i.test(n);
+
   // No ZIP library, to keep the extension small and easy to get through store review.
   // Compression uses the browser CompressionStream; if it is missing, files are stored uncompressed.
   const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -206,7 +267,7 @@
       fetchFn, origin, pathname, cookie = '', onProgress = () => {}, options = {},
     } = deps;
     const opt = Object.assign({
-      includeThinking: true, includeToolOutput: true, allBranches: false,
+      includeThinking: false, includeToolOutput: false, allBranches: false, imageMode: 'all', includeMedia: false, redactPII: false,
       transfer: true, redact: false, includeProject: true, viewer: true, note: false, aiSummary: false,
       sinceMessageUuid: null, brand: null, assets: null,
       tokenBudget: 120000, inlineMax: 60000, partChars: 200000, tailMessages: 6,
@@ -214,7 +275,12 @@
     }, options);
     const report = [];
     const log = (s) => { report.push(s); onProgress(s, { log: true }); };
-    const R = (s) => (opt.redact && typeof s === 'string' ? redactText(s) : s);
+    const R = (s) => {
+      if (typeof s !== 'string') return s;
+      if (opt.redact) s = redactText(s);
+      if (opt.redactPII) s = redactPII(s);
+      return s;
+    };
 
     const shared = deps.shared || null;
     let convId = deps.convId;
@@ -310,7 +376,7 @@
         for (const d of project.docs) {
           const pth = uniq('project/docs/' + sanitize(d.name, 100));
           put(pth, d.content);
-          items.push({ kind: 'project-doc', name: 'Project knowledge: ' + d.name, text: d.content, lang: extOf(d.name) });
+          items.push({ kind: 'project-doc', name: 'Project knowledge: ' + d.name, text: d.content, lang: extOf(d.name), ref: pth });
         }
         log(`پروژه «${project.name}»: دستورالعمل ${project.instructions ? 'دارد' : 'ندارد'} | ${project.docs.length} سند`);
       } catch (e) {
@@ -383,6 +449,8 @@
     }
 
     const downloaded = new Map();
+    // Original name -> name saved in the ZIP (they differ when claude.ai serves a .png upload as WebP)
+    const fileMap = [];
     // Files we could not fetch; also written to HANDOFF so Claude in the new chat knows what is missing
     const missing = [];
     // Files shown by present_files but created with bash (e.g. a project zip); their text is not in the chat
@@ -428,11 +496,12 @@
           const path = uniq(`files/${fname}`);
           dir.file(path, buf);
           const res = { path, name: fname };
+          fileMap.push({ uuid: id, original: f.file_name || null, saved: path });
           downloaded.set(id, res);
           if (isTextName(fname) && buf.byteLength <= opt.inlineMax * 4) {
-            items.push({ kind: 'upload', name: fname, text: new TextDecoder().decode(buf), lang: extOf(fname) });
+            items.push({ kind: 'upload', name: fname, text: new TextDecoder().decode(buf), lang: extOf(fname), zp: path });
           } else {
-            items.push({ kind: 'upload', name: fname, buf: new Uint8Array(buf) });
+            items.push({ kind: 'upload', name: fname, buf: new Uint8Array(buf), zp: path });
           }
           return res;
         } catch (e) { /* try the next URL */ }
@@ -466,6 +535,8 @@
       const role = isHuman ? 'Human' : 'Claude';
       const mdLines = [];
       const plain = [];
+      const auxIdx = new Set(); // lines about tool use; shortened first when the text must shrink
+      const pa = (...ls) => { for (const l of ls) { auxIdx.add(plain.length); plain.push(l); } };
       const viewBlocks = [];
       mdLines.push(`## ${isHuman ? 'Human' : 'Claude'}${msg.created_at ? ' — ' + when(msg.created_at) : ''}`, '');
 
@@ -502,10 +573,10 @@
             } else {
               viewBlocks.push({ t: 'tool', name: b.name, text: JSON.stringify(inp, null, 2).slice(0, 2000) });
               if (opt.includeToolOutput) mdLines.push(`> **Tool:** ${b.name}`, '', fence(JSON.stringify(inp, null, 2), 'json'), '');
-              if (b.name === 'web_search' && inp.query) plain.push(`[web search: ${inp.query}]`, '');
-              else if (b.name === 'web_fetch' && inp.url) plain.push(`[web fetch: ${inp.url}]`, '');
-              else if (inp.command && typeof inp.command === 'string') plain.push(`[${b.name}: ${inp.command.slice(0, 200).replace(/\n/g, ' ⏎ ')}]`, '');
-              else plain.push(`[tool: ${b.name}]`, '');
+              if (b.name === 'web_search' && inp.query) pa(`[web search: ${inp.query}]`, '');
+              else if (b.name === 'web_fetch' && inp.url) pa(`[web fetch: ${inp.url}]`, '');
+              else if (inp.command && typeof inp.command === 'string') pa(`[${b.name}: ${inp.command.slice(0, 200).replace(/\n/g, ' ⏎ ')}]`, '');
+              else pa(`[tool: ${b.name}]`, '');
             }
           } else if (b.type === 'tool_result') {
             { const tt = toolResultText(b.content); if (tt.trim()) viewBlocks.push({ t: 'toolres', name: b.name, text: tt.slice(0, 2000) }); }
@@ -516,7 +587,7 @@
             }
             if ((b.name === 'web_search' || b.name === 'web_fetch') && Array.isArray(b.content)) {
               const src = b.content.filter((c) => c && c.url).slice(0, 6);
-              if (src.length) { plain.push('[sources]', ...src.map((c) => `- ${c.title || c.url} — ${c.url}`), ''); viewBlocks.push({ t: 'sources', list: src.map((c) => ({ title: c.title, url: c.url })) }); }
+              if (src.length) { pa('[sources]', ...src.map((c) => `- ${c.title || c.url} — ${c.url}`), ''); viewBlocks.push({ t: 'sources', list: src.map((c) => ({ title: c.title, url: c.url })) }); }
             }
           } else if (opt.includeToolOutput) {
             mdLines.push(fence(JSON.stringify(b, null, 2), 'json'), '');
@@ -534,7 +605,7 @@
           viewBlocks.push({ t: 'attach', name: aname, path: p });
           mdLines.push(`> **Attachment:** [${aname}](${p})`, '');
           plain.push(`[attached text file: ${aname} — content is in the "Files and artifacts" section]`, '');
-          items.push({ kind: 'attachment', name: aname, text: at.extracted_content, lang: extOf(aname) });
+          items.push({ kind: 'attachment', name: aname, text: at.extracted_content, lang: extOf(aname), ref: p });
         }
       }
       const files = (msg.files_v2 && msg.files_v2.length ? msg.files_v2 : msg.files) || [];
@@ -554,7 +625,7 @@
       }
       mdLines.push('---', '');
       md.push(...mdLines);
-      compact.push({ n, role, when: when(msg.created_at), text: plain.join('\n').trim() });
+      compact.push({ n, role, when: when(msg.created_at), text: plain.join('\n').trim(), lines: plain.map((l, i) => ({ s: l, a: auxIdx.has(i) })) });
       views.push({ n, role, when: when(msg.created_at), blocks: viewBlocks });
     }
 
@@ -578,7 +649,7 @@
           if (buf.byteLength > opt.maxFileBytes) { missing.push({ name: base, reason: 'larger than 30MB' }); ok = true; break; }
           const path = uniq('outputs/' + sanitize(base, 120));
           put(path, buf);
-          items.push({ kind: 'upload', name: base, buf: new Uint8Array(buf) });
+          items.push({ kind: 'upload', name: base, buf: new Uint8Array(buf), zp: path });
           ok = true;
           break;
         } catch (e) { /* next path */ }
@@ -596,18 +667,18 @@
         const dot = base.lastIndexOf('.');
         a.versions.forEach((v, i) => put(`artifacts/_versions/${base.slice(0, dot)}_v${i + 1}${base.slice(dot)}`, v));
       }
-      orderedItems.push({ kind: 'artifact', name: `${a.title}.${artifactExt(a)}`, text: lastV, lang: artifactExt(a), src: a.path });
+      orderedItems.push({ kind: 'artifact', name: `${a.title}.${artifactExt(a)}`, text: lastV, lang: artifactExt(a), src: a.path, ref: a.path });
     }
     const genItems = [];
     for (const g of gen.values()) {
       put(g.zipPath, g.content);
-      genItems.push({ kind: g.presented ? 'deliverable' : 'generated', name: baseName(g.path), text: g.content, lang: extOf(g.path), src: g.zipPath, presented: g.presented });
+      genItems.push({ kind: g.presented ? 'deliverable' : 'generated', name: baseName(g.path), text: g.content, lang: extOf(g.path), src: g.zipPath, presented: g.presented, ref: g.zipPath });
     }
     genItems.sort((x, y) => (y.presented ? 1 : 0) - (x.presented ? 1 : 0));
     const allItems = [...orderedItems, ...genItems, ...items.filter((i) => i.kind !== 'project-doc'), ...items.filter((i) => i.kind === 'project-doc')];
 
     put('conversation.md', md.join('\n'));
-    put('conversation.json', JSON.stringify(conv, null, 2));
+    put('conversation.json', JSON.stringify(fileMap.length ? Object.assign({}, conv, { cce_file_map: fileMap }) : conv, null, 2));
 
     const artView = allItems.filter((it) => it.text != null && it.src).map((it) => ({ title: it.name, path: it.src, content: it.text.length <= 200000 ? it.text : null }));
     let noteName = null;
@@ -633,13 +704,12 @@
     if (doTransfer) {
       onProgress('در حال ساخت بسته‌ی انتقال (HANDOFF و بخش‌های متن)…', { phase: 'transfer' });
       const tdir = 'transfer/';
-      const est = (chars) => Math.ceil(chars / 3);
+      const PROMPT_TOK = 2500; // the instruction message itself
 
       // Small files go inline in the text; large ones become separate attachments
-      const budgetChars = opt.tokenBudget * 3;
       const inlineBlocks = [];
       const inlineText = []; // {index, it, txt, label}; used to shrink the size when the cap is exceeded
-      const attach = []; // {path, name, bytes, data}
+      const attach = []; // {rel, name, bytes, data, ref}; ref = path of an identical file already in the ZIP
       const skipped = missing.slice();
       const attachUsed = new Set();
       const attachName = (name) => {
@@ -648,6 +718,13 @@
         attachUsed.add(nm.toLowerCase());
         return nm;
       };
+      // A text attachment that is byte-identical to a file already stored in the ZIP is not written twice
+      const refFor = (it, txt) => (it.ref ? it.ref : it.zp && txt === it.text ? it.zp : null);
+      let imgTok = 0, fileTok = 0;
+
+      const imgs = allItems.filter((it) => it.buf && isImageName(it.name));
+      const keepImg = new Set(opt.imageMode === 'none' ? [] : opt.imageMode === 'last10' ? imgs.slice(-10) : imgs);
+
       for (const it of allItems) {
         const label = `${it.name}  [${it.kind}${it.src ? ' · ' + it.src : ''}]`;
         if (it.text != null) {
@@ -657,10 +734,19 @@
             inlineBlocks.push(`### FILE: ${label}\n\n${fence(txt, it.lang || '')}`);
           } else {
             const nm = attachName(it.name);
-            attach.push({ rel: 'files/' + nm, name: nm, data: txt, bytes: new TextEncoder().encode(txt).length });
+            attach.push({ rel: 'files/' + nm, name: nm, data: txt, bytes: new TextEncoder().encode(txt).length, ref: refFor(it, txt) });
+            fileTok += estTok(txt);
             inlineBlocks.push(`### FILE: ${label}\n\n(large file — attached separately as "${nm}")`);
           }
         } else if (it.buf) {
+          if (isMediaName(it.name) && !opt.includeMedia) {
+            skipped.push({ name: it.name, reason: 'audio/video is not transferred (Claude cannot play it)' });
+            continue;
+          }
+          if (isImageName(it.name) && !keepImg.has(it)) {
+            skipped.push({ name: it.name, reason: opt.imageMode === 'none' ? 'images were left out by choice' : 'older image left out by choice' });
+            continue;
+          }
           if (it.buf.byteLength > opt.maxFileBytes) {
             // claude.ai rejects files over 30 MB; zip first (CSV and text shrink a lot)
             // and if still too large, split into parts so nothing is lost.
@@ -676,7 +762,7 @@
             }
             const names = pieces.map(([n, d]) => {
               const nm = attachName(n);
-              attach.push({ rel: 'files/' + nm, name: nm, data: d, bytes: d.length });
+              attach.push({ rel: 'files/' + nm, name: nm, data: d, bytes: d.length, ref: null });
               return nm;
             });
             const joined = `${it.name}.zip`;
@@ -685,21 +771,25 @@
             log(`${it.name}: بزرگ‌تر از سقف بود؛ ${pieces.length > 1 ? 'در ' + pieces.length + ' تکه' : 'فشرده'} به بسته‌ی انتقال رفت.`);
           } else {
             const nm = attachName(it.name);
-            attach.push({ rel: 'files/' + nm, name: nm, data: it.buf, bytes: it.buf.byteLength });
+            attach.push({ rel: 'files/' + nm, name: nm, data: it.buf, bytes: it.buf.byteLength, ref: it.zp || null });
+            const tk = binTok(it.name, it.buf);
+            if (isImageName(it.name)) imgTok += tk; else fileTok += tk;
             inlineBlocks.push(`### FILE: ${label}\n\n(binary file — attached separately as "${nm}")`);
           }
         }
       }
+      if (skipped.length > missing.length) log(`${skipped.length - missing.length} فایل طبق گزینه‌ها وارد بسته‌ی انتقال نشد (عکس‌ها/صوت/ویدئو). در خروجی کامل موجودند.`);
 
-      // Cap inline files at half of the token budget:
-      // if they exceed it, the largest ones become separate attachments.
-      let inlineChars = inlineBlocks.reduce((n, x) => n + x.length, 0);
+      // Inline files may use at most half of the budget; if they exceed it, the largest ones become separate attachments
+      const budget = opt.tokenBudget;
+      let inlineTok = inlineBlocks.reduce((n, x) => n + estTok(x), 0);
       for (const c of inlineText.sort((a, b) => b.txt.length - a.txt.length)) {
-        if (inlineChars <= budgetChars * 0.5) break;
+        if (inlineTok <= budget * 0.5) break;
         const nm = attachName(c.it.name);
-        attach.push({ rel: 'files/' + nm, name: nm, data: c.txt, bytes: new TextEncoder().encode(c.txt).length });
+        attach.push({ rel: 'files/' + nm, name: nm, data: c.txt, bytes: new TextEncoder().encode(c.txt).length, ref: refFor(c.it, c.txt) });
+        fileTok += estTok(c.txt);
         const moved = `### FILE: ${c.label}\n\n(attached separately as "${nm}" to keep the context small)`;
-        inlineChars -= inlineBlocks[c.index].length - moved.length;
+        inlineTok -= estTok(inlineBlocks[c.index]) - estTok(moved);
         inlineBlocks[c.index] = moved;
       }
 
@@ -708,17 +798,48 @@
       const filesHeader = '## Files and artifacts (latest versions)';
       const head = `# ${title}\n\nContext transferred from another Claude account.\nOriginal chat: ${origin}/chat/${convId}${conv.created_at ? ' · created ' + when(conv.created_at) : ''} · ${msgs.length} messages.`;
 
-      const buildTranscript = (level) => compact.map((c, i) => {
-        let t = c.text;
-        const isTail = i >= compact.length - 12;
-        if (level >= 1 && !isTail && c.role === 'Claude' && t.length > 1500) t = t.slice(0, 1200) + '\n…[truncated — full text in conversation.md]';
-        if (level >= 2 && !isTail && t.length > 2500) t = t.slice(0, 2000) + '\n…[truncated — full text in conversation.md]';
-        return `### [${c.n}] ${c.role}${c.when ? ' — ' + c.when : ''}\n\n${R(t)}`;
-      });
-      let level = 0, transcript = buildTranscript(0);
-      const fixedChars = head.length + (projBlock ? projBlock.length : 0) + inlineBlocks.reduce((s, x) => s + x.length, 0);
-      while (level < 2 && fixedChars + transcript.reduce((s, x) => s + x.length, 0) > budgetChars) { level++; transcript = buildTranscript(level); }
-      if (level) log(`حجم متن از سقف ${opt.tokenBudget} توکن بیشتر بود؛ پیام‌های قدیمی خلاصه/کوتاه شدند (سطح ${level}). متن کامل در conversation.md است.`);
+      // Shrinking ladder, gentlest first, only while the estimate is over the budget:
+      //   1: drop source lists and clip tool lines in older messages
+      //   2: drop tool lines in older messages entirely
+      //   3: cut very long older Claude replies (human messages stay whole)
+      //   4: cut long older Claude replies harder and very long human messages
+      // The last 12 messages are never touched.
+      let shortened = 0;
+      const clipAt = (t, lim, keep) => {
+        if (t.length <= lim) return t;
+        let cut = t.lastIndexOf('\n\n', keep);
+        if (cut < keep * 0.6) cut = keep;
+        shortened++;
+        return t.slice(0, cut).trimEnd() + '\n…[shortened — the full text is in the exported ZIP, not attached]';
+      };
+      const buildTranscript = (level) => {
+        shortened = 0;
+        return compact.map((c, i) => {
+          const isTail = i >= compact.length - 12;
+          let t;
+          if (isTail || level === 0) t = c.text;
+          else {
+            const keep = []; let dropped = 0;
+            for (const l of c.lines) {
+              if (!l.a) { keep.push(l.s); continue; }
+              if (level >= 2) { if (l.s.startsWith('[')) dropped++; continue; }
+              if (l.s.startsWith('- ') || l.s === '[sources]') continue; // level 1: source lists go
+              keep.push(l.s.length > 140 ? l.s.slice(0, 137) + '…]' : l.s);
+            }
+            if (dropped) keep.push(`[${dropped} tool step(s) omitted]`);
+            t = keep.join('\n').trim();
+            if (level >= 3 && c.role === 'Claude') t = level >= 4 ? clipAt(t, 1800, 1400) : clipAt(t, 3500, 2800);
+            if (level >= 4 && c.role === 'Human') t = clipAt(t, 5000, 3500);
+          }
+          return `### [${c.n}] ${c.role}${c.when ? ' — ' + c.when : ''}\n\n${R(t)}`;
+        });
+      };
+      const fixedTok = estTok(head) + (projBlock ? estTok(projBlock) : 0) + inlineBlocks.reduce((n, x) => n + estTok(x), 0);
+      const sumTok = (arr) => arr.reduce((n, x) => n + estTok(x), 0);
+      const nonText = imgTok + fileTok + PROMPT_TOK;
+      let level = 0, transcript = buildTranscript(0), trTok = sumTok(transcript);
+      while (level < 4 && fixedTok + trTok + nonText > budget) { level++; transcript = buildTranscript(level); trTok = sumTok(transcript); }
+      if (level) log(`متن از سقف ${budget >= 1e9 ? '' : opt.tokenBudget + ' توکن '}بیشتر بود؛ فقط بخش‌های کم‌اهمیت قدیمی کوتاه شد (سطح ${level} از ۴${shortened ? '، ' + shortened + ' پیام کوتاه‌شده' : ''}). پیام‌های خودتان (جز موارد بسیار بلند) دست‌نخورده‌اند.`);
 
       const blocks = [head];
       if (projBlock) blocks.push(projBlock);
@@ -747,8 +868,9 @@
       const N = partsText.length;
       const pad = (i) => String(i).padStart(2, '0');
       const partNames = partsText.map((_, i) => `context-part-${pad(i + 1)}-of-${pad(N)}.md`);
-      const totalChars = partsText.reduce((s, x) => s + x.length, 0);
-      const estTokens = est(totalChars);
+      const textTok = sumTok(partsText);
+      const estTokens = textTok + imgTok + fileTok + PROMPT_TOK;
+      const breakdown = { text: textTok, images: imgTok, files: fileTok };
 
       const attachList = [];
       partsText.forEach((t, i) => {
@@ -757,22 +879,24 @@
         attachList.push({ path: partNames[i], name: partNames[i], bytes: new TextEncoder().encode(txt).length, mime: 'text/markdown' });
       });
       for (const a of attach) {
-        dir.file(tdir + a.rel, a.data);
-        attachList.push({ path: a.rel, name: a.name, bytes: a.bytes, mime: mimeFromName(a.name) });
+        // ref: the same bytes already live in the ZIP (files/, artifacts/, ...), so they are not stored a second time
+        if (a.ref) attachList.push({ ref: a.ref, name: a.name, bytes: a.bytes, mime: mimeFromName(a.name) });
+        else { dir.file(tdir + a.rel, a.data); attachList.push({ path: a.rel, name: a.name, bytes: a.bytes, mime: mimeFromName(a.name) }); }
       }
 
       const clip = (s, k) => (s.length > k ? s.slice(0, k) + ' …[truncated]' : s);
       const firstHuman = compact.find((c) => c.role === 'Human');
       const tail = compact.slice(-opt.tailMessages).map((c) => `**[${c.n}] ${c.role}:** ${clip(R(c.text), 2500)}`).join('\n\n');
-      const prompt = [
-        '# Continue a conversation transferred from another Claude account',
+      const mkPrompt = (inProject) => [
+        inProject ? '# Continue a conversation transferred from another Claude account (Project mode)' : '# Continue a conversation transferred from another Claude account',
         '',
-        'I am continuing a conversation I previously had with Claude in a different account. Everything needed to continue is attached.',
+        'I am continuing a conversation I previously had with Claude in a different account. Everything needed to continue ' + (inProject ? 'is in this Project\'s knowledge.' : 'is attached.'),
         '',
-        '## What is attached',
-        `- ${N} context file(s), in order: ${partNames.join(', ')}. They contain ${project && projectId ? 'the project instructions, ' : ''}the full transcript, and the latest version of every artifact/file produced in the chat.`,
+        inProject ? '## What is in the Project knowledge' : '## What is attached',
+        `- ${N} context file(s), in order: ${partNames.join(', ')}. They contain ${project && projectId ? 'the project instructions, ' : ''}the transcript, and the latest version of every artifact/file produced in the chat.`,
         attach.length ? `- ${attach.length} extra file(s): ${attach.map((a) => a.name).join(', ')}.` : '- No extra files.',
         skipped.length ? `- NOT transferred: ${skipped.map((s) => `${s.name} (${s.reason})`).join('; ')}.` : '',
+        level >= 3 && shortened ? '- Some long, older messages were shortened (marked "[shortened"). Ask me if a detail seems to be missing.' : '',
         '',
         '## How to proceed',
         '1. Read ALL context files in order before answering.',
@@ -789,16 +913,19 @@
         firstHuman ? `\n## First request (truncated)\n${clip(R(firstHuman.text), 1500)}` : '',
         `\n## Most recent exchanges (truncated)\n${tail}`,
       ].filter((x) => x !== '').join('\n');
+      const prompt = mkPrompt(false);
 
       dir.file(tdir + 'HANDOFF.md', prompt + '\n');
+      dir.file(tdir + 'ATTACH-LIST.txt', [...partNames.map((n) => 'transfer/' + n), ...attachList.filter((a) => !partNames.includes(a.name)).map((a) => (a.ref ? a.ref : 'transfer/' + a.path))].join('\n') + '\n');
       dir.file(tdir + 'HOW-TO-IMPORT.txt', [
         'روش خودکار (توصیه می‌شود):',
         '۱) در اکانت جدید claude.ai یک چت جدید باز کنید (یا داخل یک Project).',
-        '۲) دکمه «⬆ Import» پایین-چپ صفحه → همین فایل ZIP را انتخاب کنید.',
+        '۲) دکمه‌ی گرد نویاتیس ← تب «ورود» ← «انتخاب ZIP انتقال» و همین فایل ZIP را انتخاب کنید.',
         '۳) فایل‌ها پیوست و متن آماده در کادر پیام قرار می‌گیرد؛ فقط Send را بزنید.',
+        '   اگر حجم زیاد باشد، افزونه «بسته‌ی Project» را پیشنهاد می‌دهد.',
         '',
         'روش دستی:',
-        '۱) همه‌ی فایل‌های context-part-*.md و پوشه‌ی files/ را به چت جدید پیوست کنید.',
+        '۱) همه‌ی فایل‌های فهرست‌شده در ATTACH-LIST.txt را به چت جدید پیوست کنید.',
         '۲) محتوای HANDOFF.md را به‌عنوان پیام بچسبانید و بفرستید.',
         '',
         'اگر محدودیت تعداد/حجم فایل پر شد: یک Project جدید بسازید، فایل‌ها را در Knowledge آن بگذارید،',
@@ -806,12 +933,14 @@
         project ? 'دستورالعمل‌های پروژه‌ی قبلی در پوشه‌ی project/ هست؛ آن را در Instructions پروژه‌ی جدید بگذارید.' : '',
       ].join('\n'));
       dir.file(tdir + 'manifest.json', JSON.stringify({
-        format: 'cce-transfer/1', title, convId, parts: N, estTokens, prompt, attach: attachList, skipped,
+        format: 'cce-transfer/1', title, convId, parts: N, messages: msgs.length, estTokens, breakdown, level, shortened,
+        prompt, projectPrompt: mkPrompt(true), attach: attachList, skipped,
+        hasProjectInstructions: !!(project && project.instructions),
       }, null, 2));
 
-      stats = { estTokens, parts: N, attachFiles: attachList.length };
-      log(`بسته‌ی انتقال: ${N} بخش متن + ${attach.length} فایل جدا | حدود ${estTokens} توکن`);
-      if (estTokens > 150000) log('حجم از حدود ۱۵۰ هزار توکن بیشتر است؛ برای چت جدید بهتر است از Project (Knowledge) استفاده کنید یا سقف توکن را کم کنید.');
+      stats = { estTokens, parts: N, attachFiles: attachList.length, breakdown, level, shortened, suggestProject: estTokens > 150000 };
+      log(`بسته‌ی انتقال: ${N} بخش متن + ${attach.length} فایل جدا | حدود ${estTokens} توکن (متن ${textTok} · عکس‌ها ${imgTok} · فایل‌ها ${fileTok})`);
+      if (stats.suggestProject) log('حجم از حدود ۱۵۰ هزار توکن بیشتر است. هنگام ورود، افزونه «بسته‌ی Project» را پیشنهاد می‌دهد (چت جدید پر نمی‌شود).');
     }
 
     log(`پیام‌ها: ${msgs.length} | فایل‌ها: ${[...downloaded.values()].filter(Boolean).length}/${downloaded.size} | آرتیفکت‌ها: ${artifacts.size} | فایل‌های ساخته‌شده: ${gen.size}`);
@@ -930,7 +1059,7 @@
   }
 
   const PHASES = [['account', 'خواندن اطلاعات حساب'], ['fetch', 'دریافت متن چت'], ['project', 'اطلاعات Project'], ['messages', 'پردازش پیام‌ها و دانلود فایل‌ها'], ['transfer', 'ساخت بسته‌ی انتقال'], ['hash', 'محاسبه‌ی هش فایل‌ها'], ['zip', 'ساخت ZIP']];
-  const api = { PHASES, makeZip, listChats, exportMany, exportChat, unzip, sanitize, artifactExt, mimeFromName, redactText, isTextName };
+  const api = { PHASES, makeZip, listChats, exportMany, exportChat, unzip, sanitize, artifactExt, mimeFromName, redactText, redactPII, estTok, imageDims, isTextName };
   root.CCE = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
