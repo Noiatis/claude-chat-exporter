@@ -26,6 +26,7 @@ Unofficial browser extension for **Chrome and Firefox** to export your [claude.a
 | 🧩 | **Artifacts and files** | Every artifact version, files Claude created (with later edits applied), uploads and Project instructions. |
 | 🛡️ | **Redaction** | Optionally strips API keys and tokens, and separately phone numbers and e-mail addresses. All your options are remembered. |
 | 🎛️ | **Fine-grained options** | Include Claude's "thinking" and tool details, export all edit/retry branches (all off by default), choose images (all / last 10 / none) and audio/video for the transfer pack, and set its token budget (60k / 120k / 170k / no cap). |
+| 🔤 | **Persian and English interface** | Switch the language with the button in the panel header or the toolbar popup. The offline reader, backup index and import guide follow the language you chose. Persian is the default. |
 
 ---
 
