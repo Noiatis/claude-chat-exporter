@@ -938,7 +938,7 @@
       }, null, 2));
 
       stats = { estTokens, parts: N, attachFiles: attachList.length, breakdown, level, shortened, suggestProject: estTokens > 150000 };
-      log(`بسته‌ی انتقال: ${N} بخش متن + ${attach.length} فایل جدا | حدود ${estTokens} توکن (متن ${textTok} · عکس‌ها ${imgTok} · فایل‌ها ${fileTok})`);
+      log(`بسته‌ی انتقال: ${N} بخش متن + ${attach.length} فایل جدا | حدود ${estTokens} توکن${imgTok || fileTok ? ` (متن ${textTok}${imgTok ? ' · عکس‌ها ' + imgTok : ''}${fileTok ? ' · فایل‌ها ' + fileTok : ''})` : ''}`);
       if (stats.suggestProject) log('حجم از حدود ۱۵۰ هزار توکن بیشتر است. هنگام ورود، افزونه «بسته‌ی Project» را پیشنهاد می‌دهد (چت جدید پر نمی‌شود).');
     }
 
@@ -1048,7 +1048,7 @@
         if (bytes > maxZipBytes) await flush(false);
       } else {
         failed.push({ chat, error: err && err.message });
-        onProgress(`چت «${chat.name}» ناموفق بود: ${err && err.message}`, { log: true });
+        onProgress(`چت «${chat.name}» ناموفق بود: ${err && err.message}`, { log: true, error: true });
       }
       // No pause between chats: Chrome throttles timers in background tabs by up to a minute; just yield to the event loop
       await Promise.resolve();

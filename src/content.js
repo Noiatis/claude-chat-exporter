@@ -583,7 +583,9 @@
       const o = Object.assign({}, options, { brand: brandOpt(), assets });
       const parts = [];
       const out = await CCE.exportMany({
-        fetchFn: (u, x) => fetch(u, x), origin: location.origin, org: opt2.org || listing.org, chats, options: o, onProgress: notify,
+        fetchFn: (u, x) => fetch(u, x), origin: location.origin, org: opt2.org || listing.org, chats, options: o,
+        // Per-chat details would fill the panel on large backups; only failures are listed
+        onProgress: (t, i) => { if (!(i && i.log && !i.error)) notify(t, i); },
         onPart: async (p) => { await deliver(p.data, p.filename); parts.push(p.filename); },
       });
       const st = await getState();
