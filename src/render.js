@@ -6,6 +6,10 @@
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const safeUrl = (u) => (/^https?:\/\//i.test(u || '') ? u : '');
   const relUrl = (p) => esc(encodeURI(String(p)));
+  // Page text and direction follow the interface language (brand.js); without it, Persian
+  const T = (k) => (root.CCE_I18N ? root.CCE_I18N.t(k) : k);
+  const isEn = () => !!root.CCE_I18N && root.CCE_I18N.lang === 'en';
+  const htmlAttrs = () => (isEn() ? 'lang="en" dir="ltr"' : 'lang="fa" dir="rtl"');
 
   // Small, safe Markdown: everything is escaped first, then only a few known patterns become tags
   function inline(src) {
@@ -87,14 +91,14 @@
   const logoImg = (assetBase, size) =>
     assetBase ? `<span class="mk" style="width:${size}px;height:${size}px"><img src="${esc(assetBase + LOGO_FILE)}" alt="" width="${size}" height="${size}"></span>` : '';
 
-  const brandName = (brand) => esc((brand && (brand.nameFa || brand.name)) || '');
+  const brandName = (brand) => esc((brand && ((isEn() ? '' : brand.nameFa) || brand.name)) || '');
   const brandLink = (brand, inner) => {
     const u = brand && safeUrl(brand.url);
     return u ? `<a class="brand" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${inner}</a>` : `<span class="brand">${inner}</span>`;
   };
   const brandFooter = (brand, assetBase) => {
     if (!brand || !brand.name) return '';
-    return `<footer class="ft">${brandLink(brand, `${logoImg(assetBase, 22)}<span>${brandName(brand)}</span>`)}<span>خروجی افزونه‌ی Claude Chat Exporter</span></footer>`;
+    return `<footer class="ft">${brandLink(brand, `${logoImg(assetBase, 22)}<span>${brandName(brand)}</span>`)}<span>${T('v.footer')}</span></footer>`;
   };
   // Top bar: logo and team name on one side, tools on the other
   const masthead = (brand, assetBase, tools) =>
@@ -182,8 +186,8 @@ h2.sec{margin:40px 0 8px;font-size:19px;font-weight:600}
         case 'file': return `<a class="chip" href="${relUrl(b.path || '#')}">${esc(b.name || b.text)}</a>`;
         case 'attach': return `<a class="chip" href="${relUrl(b.path)}">${esc(b.name)}</a>`;
         case 'image': return `<figure><a href="${relUrl(b.path)}"><img src="${relUrl(b.path)}" alt="${esc(b.name)}" loading="lazy"></a><figcaption>${esc(b.name)}</figcaption></figure>`;
-        case 'tool': return `<details class="tool"><summary>ابزار: ${esc(b.name)}</summary><pre>${esc(b.text)}</pre></details>`;
-        case 'toolres': return `<details class="tool"><summary>نتیجه‌ی ابزار: ${esc(b.name || 'result')}</summary><pre>${esc(b.text)}</pre></details>`;
+        case 'tool': return `<details class="tool"><summary>${T('v.tool')}${esc(b.name)}</summary><pre>${esc(b.text)}</pre></details>`;
+        case 'toolres': return `<details class="tool"><summary>${T('v.toolres')}${esc(b.name || 'result')}</summary><pre>${esc(b.text)}</pre></details>`;
         case 'sources': return '<ul class="src">' + b.list.map((s) => { const u = safeUrl(s.url); return `<li>${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(s.title || s.url)}</a>` : esc(s.title || s.url)}</li>`; }).join('') + '</ul>';
         case 'note': return `<div class="note">${esc(b.text)}</div>`;
         default: return '';
@@ -194,15 +198,15 @@ h2.sec{margin:40px 0 8px;font-size:19px;font-weight:600}
   function viewerHtml(o) {
     const { title, meta = [], views = [], artifacts = [], brand, assetBase } = o;
     const msgs = views.map((v) => `<article class="msg ${v.role}" id="m${v.n}"><div class="hd"><div class="who">${v.role === 'Human' ? 'Human' : 'Claude'}</div><div><a href="#m${v.n}">#${v.n}</a> <time dir="ltr">${esc(v.when || '')}</time></div></div><div class="bd" dir="auto">${renderBlocks(v.blocks)}</div></article>`).join('\n');
-    const arts = artifacts.length ? '<h2 class="sec">Artifacts و فایل‌ها (آخرین نسخه)</h2>' + artifacts.map((a) =>
-      `<details class="art"><summary><b>${esc(a.title)}</b> <small>${esc(a.path)}</small> · <a href="${relUrl(a.path)}">باز کردن فایل</a></summary>${a.content != null ? `<pre><code>${esc(a.content)}</code></pre>` : '<p class="note">فایل بزرگ است؛ از لینک باز کنید.</p>'}</details>`).join('\n') : '';
-    const tools = `<input type="search" id="q" placeholder="جست‌وجو در چت…" aria-label="جست‌وجو">
-  <label><input type="checkbox" id="t1" checked> تفکر</label>
-  <label><input type="checkbox" id="t2" checked> ابزارها</label>
-  <button id="th" type="button">تیره / روشن</button>
-  <button id="pr" type="button">چاپ / PDF</button>`;
+    const arts = artifacts.length ? `<h2 class="sec">${T('v.arts')}</h2>` + artifacts.map((a) =>
+      `<details class="art"><summary><b>${esc(a.title)}</b> <small>${esc(a.path)}</small> · <a href="${relUrl(a.path)}">${T('v.open')}</a></summary>${a.content != null ? `<pre><code>${esc(a.content)}</code></pre>` : `<p class="note">${T('v.bigfile')}</p>`}</details>`).join('\n') : '';
+    const tools = `<input type="search" id="q" placeholder="${T('v.search.chat')}" aria-label="${T('v.search')}">
+  <label><input type="checkbox" id="t1" checked> ${T('v.thinking')}</label>
+  <label><input type="checkbox" id="t2" checked> ${T('v.tools')}</label>
+  <button id="th" type="button">${T('v.theme')}</button>
+  <button id="pr" type="button">${T('v.print')}</button>`;
     return `<!doctype html>
-<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html ${htmlAttrs()}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><style>${BASE_CSS(assetBase)}</style></head>
 <body>
 ${masthead(brand, assetBase, tools)}
@@ -264,18 +268,18 @@ ${masthead(brand, assetBase, tools)}
       return `<a class="row" href="${esc(href)}" data-s="${esc((e.title + ' ' + (e.project || '')).toLowerCase())}" data-d="${esc(e.updated || '')}" data-t="${esc(e.title.toLowerCase())}" data-p="${esc(e.project || '')}" data-m="${e.messages || 0}">
   <b><bdi>${esc(e.title)}</bdi></b><span class="c-p"><bdi>${esc(e.project || '')}</bdi></span><span class="c-d" dir="ltr">${esc(date)}</span><span class="c-m">${e.messages || 0}</span></a>`;
     }).join('\n');
-    const tools = `<input type="search" id="q" placeholder="جست‌وجو در عنوان چت‌ها…" aria-label="جست‌وجو">
-  <button id="th" type="button">تیره / روشن</button>`;
-    return `<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    const tools = `<input type="search" id="q" placeholder="${T('v.search.titles')}" aria-label="${T('v.search')}">
+  <button id="th" type="button">${T('v.theme')}</button>`;
+    return `<!doctype html><html ${htmlAttrs()}><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><style>${BASE_CSS(assetBase)}</style></head><body>
 ${masthead(brand, assetBase, tools)}
 <div class="wrap"><section class="hero"><h1 class="title">${esc(title)}</h1>
-<p class="stats"><span><b>${entries.length}</b>چت</span><span><b>${msgTotal}</b>پیام</span>${projects.length ? `<span><b>${projects.length}</b>پروژه</span>` : ''}</p>
-<div class="tools">${projects.length ? `<select id="pj" aria-label="پروژه"><option value="">همه‌ی پروژه‌ها</option>${projects.map((p) => `<option>${esc(p)}</option>`).join('')}</select>` : ''}
-<select id="so" aria-label="مرتب‌سازی"><option value="d">تازه‌ترین</option><option value="m">بیشترین پیام</option><option value="t">عنوان</option></select></div></section>
-<div class="row h" aria-hidden="true"><span>عنوان</span><span class="c-p">پروژه</span><span>آخرین تغییر</span><span>پیام</span></div>
+<p class="stats"><span><b>${entries.length}</b>${T('v.chats')}</span><span><b>${msgTotal}</b>${T('v.messages')}</span>${projects.length ? `<span><b>${projects.length}</b>${T('v.projects')}</span>` : ''}</p>
+<div class="tools">${projects.length ? `<select id="pj" aria-label="${T('v.project')}"><option value="">${T('v.allprojects')}</option>${projects.map((p) => `<option>${esc(p)}</option>`).join('')}</select>` : ''}
+<select id="so" aria-label="${T('v.sort')}"><option value="d">${T('v.sort.d')}</option><option value="m">${T('v.sort.m')}</option><option value="t">${T('v.sort.t')}</option></select></div></section>
+<div class="row h" aria-hidden="true"><span>${T('v.col.title')}</span><span class="c-p">${T('v.project')}</span><span>${T('v.col.changed')}</span><span>${T('v.col.msgs')}</span></div>
 <div id="ls">${rows}</div>
-<p class="empty hidden" id="em">چتی با این فیلتر پیدا نشد.</p>
+<p class="empty hidden" id="em">${T('v.empty')}</p>
 ${brandFooter(brand, assetBase)}</div>
 <script>
 (function(){var r=document.documentElement,ls=document.getElementById('ls'),cs=[].slice.call(ls.children),q=document.getElementById('q'),pj=document.getElementById('pj'),so=document.getElementById('so');
