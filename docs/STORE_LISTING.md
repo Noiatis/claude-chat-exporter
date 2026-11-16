@@ -16,13 +16,14 @@ Claude Chat Exporter saves your claude.ai conversations — messages, uploaded f
 • Incremental export: only new messages since your last export
 • Scheduled backup of new/changed chats (optional)
 • Optional redaction of API keys/tokens
+• Persian and English interface (switch with one button)
 • Your settings are remembered
 • 100% local: no servers, no analytics, no data leaves your browser
 
 Unofficial tool. Not affiliated with or endorsed by Anthropic.
 
 ## توضیح (فارسی)
-افزونه‌ی Claude Chat Exporter چت‌های claude.ai را همراه فایل‌ها و آرتیفکت‌ها در یک ZIP ذخیره می‌کند؛ پشتیبان‌گیری از همه‌ی چت‌ها، مرورگر آفلاین HTML (قابل چاپ/PDF)، فرمت Obsidian/Notion، بسته‌ی انتقال به اکانت دیگر، خروجی افزایشی و پشتیبان خودکار. همه‌چیز محلی است و هیچ داده‌ای ارسال نمی‌شود. ابزار غیررسمی است.
+افزونه‌ی Claude Chat Exporter چت‌های claude.ai را همراه فایل‌ها و آرتیفکت‌ها در یک ZIP ذخیره می‌کند؛ پشتیبان‌گیری از همه‌ی چت‌ها، مرورگر آفلاین HTML (قابل چاپ/PDF)، فرمت Obsidian/Notion، بسته‌ی انتقال به اکانت دیگر، خروجی افزایشی، پشتیبان خودکار و رابط فارسی و انگلیسی. همه‌چیز محلی است و هیچ داده‌ای ارسال نمی‌شود. ابزار غیررسمی است.
 
 ## Single purpose (Chrome dashboard)
 Export and back up the user's own claude.ai conversations to files on their computer.
