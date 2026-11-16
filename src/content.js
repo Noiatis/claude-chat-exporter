@@ -4,11 +4,13 @@
   window.__cceLoaded = true;
   const ext = typeof browser !== 'undefined' ? browser : chrome;
   const B = window.CCE_BRAND;
+  const I = window.CCE_I18N;
+  const t = (k, p) => I.t(k, p);
   let running = false;
   const BATCH = 20; // claude.ai accepts at most 20 attachments per message
 
   const O = window.CCE_OPTS;
-  const DEF = Object.assign(O.defaults(), { pjclean: true });
+  const DEF = Object.assign(O.defaults(), { pjclean: true, lang: 'fa' });
   const loadOpts = async () => {
     try { const r = await ext.storage.local.get('cce'); return Object.assign({}, DEF, (r && r.cce) || {}); } catch (e) { return Object.assign({}, DEF); }
   };
@@ -51,7 +53,7 @@
   const host = document.createElement('div');
   host.style.cssText = 'all:initial;position:fixed;bottom:16px;left:16px;z-index:2147483647';
   const sh = host.attachShadow({ mode: 'open' });
-  const SW = (k, label, hint) => `<label class="sw"><span class="tx"><b>${label}</b><small>${hint}</small></span><input type="checkbox" data-k="${k}"><i></i></label>`;
+  const SW = (k, label, hint) => `<label class="sw"><span class="tx"><b data-t="${label}"></b><small data-t="${hint}"></small></span><input type="checkbox" data-k="${k}"><i></i></label>`;
   const TEMPLATE = `
 <style>
   :host{all:initial}
@@ -122,7 +124,7 @@
   .step .ic{width:18px;height:18px;flex:none;display:grid;place-items:center;border-radius:50%;font-size:11px;font-weight:700;border:2px solid var(--line)}
   .step.active{color:var(--fg);font-weight:600} .step.active .ic{border-color:var(--acc);border-top-color:transparent;animation:spin .9s linear infinite}
   .step.done{color:var(--fg)} .step.done .ic{background:var(--fg);border-color:var(--fg);color:var(--bg)} .step.done .ic::before{content:"✓"}
-  .step.skipped .ic{border-style:dashed;border-color:var(--ctl)} .step.skipped .lb::after{content:" (رد شد)";font-size:12px}
+  .step.skipped .ic{border-style:dashed;border-color:var(--ctl)} .step.skipped .lb::after{content:var(--skip);font-size:12px}
   .step.fail{color:var(--err);font-weight:600} .step.fail .ic{background:var(--err);border-color:var(--err);color:var(--bg);animation:none} .step.fail .ic::before{content:"✕"}
   .track{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
   .bar{height:100%;width:0;background:var(--acc)} .bar.ok{background:var(--fg)} .bar.err{background:var(--err)}
@@ -147,83 +149,88 @@
   footer{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px;border-top:1px solid var(--line);color:var(--mut);font-size:12px}
   footer .by{display:flex;align-items:center;gap:7px} footer a{color:var(--accT);text-decoration:underline}
   footer span.n{font-weight:600;color:var(--fg)}
+  .lg{border:1px solid var(--ctl);background:var(--bg);color:var(--fg);border-radius:6px;min-height:28px;padding:2px 10px;font-size:12px;font-weight:600} .lg:hover{background:var(--soft)}
+  .wrap.ltr{direction:ltr;text-align:left}
+  .ltr .sw i::after{right:auto;left:2px}
+  .ltr .sw input:checked + i::after{transform:translateX(14px)}
+  .ltr .steps2{padding:0 0 0 18px}
   [hidden]{display:none!important}
   @media (prefers-reduced-motion:reduce){.busy .fab .ring,.step.active .ic,.bseg i.act{animation:none}.step.active .ic{border-top-color:var(--acc)}}
   @media (prefers-reduced-motion:no-preference){.sw i::after{transition:transform .12s}}
 </style>
 <div class="wrap">
-  <button class="fab" title="Claude Chat Exporter (برای جابه‌جایی بکشید)" aria-label="Claude Chat Exporter"><span class="ring"></span></button>
+  <button class="fab" data-tl="fab.title" aria-label="Claude Chat Exporter"><span class="ring"></span></button>
   <section class="card" hidden>
-    <header><span id="hmark"></span><div class="t"><b>Claude Chat Exporter</b><small id="sub"></small></div><button class="x" title="بستن" aria-label="بستن">×</button></header>
+    <header><span id="hmark"></span><div class="t"><b>Claude Chat Exporter</b><small id="sub"></small></div><button class="lg" id="lang" type="button"></button><button class="x" data-tl="close">×</button></header>
     <div class="tabs" id="tabs">
-      <button class="tab on" data-tab="single">این چت</button>
-      <button class="tab" data-tab="bulk">همه‌ی چت‌ها</button>
-      <button class="tab" data-tab="import">ورود</button>
+      <button class="tab on" data-tab="single" data-t="tab.single"></button>
+      <button class="tab" data-tab="bulk" data-t="tab.bulk"></button>
+      <button class="tab" data-tab="import" data-t="tab.import"></button>
     </div>
     <div class="body">
       <div id="v-single">
         <button class="btn primary" id="exp">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>دریافت ZIP از این چت</span></button>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span data-t="btn.export"></span></button>
         <div class="opts" id="o-main"></div>
-        <details class="more"><summary>گزینه‌های بیشتر</summary><div class="opts" id="o-more"></div></details>
+        <details class="more"><summary data-t="more"></summary><div class="opts" id="o-more"></div></details>
         <div class="msg" id="msg1"></div>
       </div>
       <div id="v-bulk" hidden>
         <button class="btn secondary" id="load">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span id="loadl">بارگیری فهرست چت‌ها</span></button>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span id="loadl" data-t="bulk.load"></span></button>
         <div id="bulkbox" hidden>
           <div class="chips" id="chips">
-            <button class="chip on" data-sc="all">همه</button>
-            <button class="chip" data-sc="project" id="scproj">این Project</button>
-            <button class="chip" data-sc="changed">جدید / تغییرکرده</button>
-            <button class="chip" data-sc="none">هیچ‌کدام</button>
+            <button class="chip on" data-sc="all" data-t="chip.all"></button>
+            <button class="chip" data-sc="project" id="scproj" data-t="chip.project"></button>
+            <button class="chip" data-sc="changed" data-t="chip.changed"></button>
+            <button class="chip" data-sc="none" data-t="chip.none"></button>
           </div>
-          <input class="search" id="bsearch" placeholder="جست‌وجو در عنوان…">
-          <div class="tools"><button id="selshown">انتخاب همین فهرست</button><button id="unshown">برداشتن همین فهرست</button><button id="invshown">معکوس</button></div>
+          <input class="search" id="bsearch" data-tp="search.ph">
+          <div class="tools"><button id="selshown" data-t="sel.shown"></button><button id="unshown" data-t="unsel.shown"></button><button id="invshown" data-t="inv.shown"></button></div>
           <div class="list" id="blist"></div>
           <div class="cnt" id="bcnt"></div>
-          <button class="btn primary" id="bgo"><span id="bgol">پشتیبان‌گیری</span></button>
+          <button class="btn primary" id="bgo"><span id="bgol" data-t="bulk.go"></span></button>
         </div>
         <div class="note">
-          <p>هر چت یک پوشه‌ی جدا با index.html قابل‌جست‌وجو می‌گیرد. اگر حجم زیاد شود، خروجی به چند ZIP تقسیم می‌شود.</p>
-          <p>تا پایان کار تب را نبندید. اگر تب در پس‌زمینه باشد، کار ادامه دارد ولی کندتر می‌شود.</p>
-          <p>پشتیبان‌گیری خودکار را از آیکون افزونه در نوار ابزار تنظیم کنید.</p>
+          <p data-t="bulk.note1"></p>
+          <p data-t="bulk.note2"></p>
+          <p data-t="bulk.note3"></p>
         </div>
         <div class="msg" id="msg2"></div>
       </div>
       <div id="v-import" hidden>
         <section class="pane">
-          <h3>ادامه‌ی یک چت قبلی</h3>
-          <p>ZIP انتقالی که قبلاً از «این چت» یا «همه‌ی چت‌ها» گرفته‌اید. گفتگو و فایل‌هایش در چت جدید ادامه پیدا می‌کند.</p>
-          <p class="ex">مثلاً: چت اکانت قدیمی را در اکانت جدید ادامه می‌دهم.</p>
+          <h3 data-t="imp.h"></h3>
+          <p data-t="imp.p"></p>
+          <p class="ex" data-t="imp.ex"></p>
           <button class="btn secondary" id="imp">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg><span id="impl">انتخاب ZIP انتقال</span></button>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg><span id="impl" data-t="imp.pick"></span></button>
           <div id="impflow" hidden>
             <div id="chatpick" hidden>
-              <div class="lbl">این ZIP چند چت دارد. کدام را ادامه می‌دهید؟</div>
-              <input class="search" id="cpsearch" placeholder="جست‌وجو در عنوان…" hidden>
+              <div class="lbl" data-t="imp.which"></div>
+              <input class="search" id="cpsearch" data-tp="search.ph" hidden>
               <div class="list" id="cplist"></div>
             </div>
-            <div class="lbl">حجم تخمینی این چت</div>
+            <div class="lbl" data-t="imp.est"></div>
             <div class="meter" id="meter"><i></i></div>
             <div class="mlb" id="mlb"></div>
-            <div class="lbl">روش ادامه</div>
+            <div class="lbl" data-t="imp.way"></div>
             <div class="modes" id="modes"></div>
-            <button class="btn primary" id="impgo"><span>شروع</span></button>
+            <button class="btn primary" id="impgo"><span data-t="imp.start"></span></button>
           </div>
           <div class="bseg" id="bseg" hidden></div>
           <div class="msg" id="msg3"></div>
         </section>
         <section class="pane">
-          <h3>فرستادن پوشه‌ی پروژه به Claude</h3>
-          <p>پوشه‌ی کدها و فایل‌های شما یک‌جا فشرده می‌شود و در همین چت پیوست می‌شود. فایل‌های اصلی تغییر نمی‌کنند.</p>
-          <p class="ex">مثلاً: می‌خواهم Claude پروژه‌ی <bdi dir="ltr">my-app</bdi> را ببیند.</p>
+          <h3 data-t="pj.h"></h3>
+          <p data-t="pj.p"></p>
+          <p class="ex" data-t="pj.ex"></p>
           <button class="btn secondary" id="pj">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span id="pjl">انتخاب پوشه</span></button>
-          <div class="opts">${SW('pjclean', 'حذف پوشه‌های سنگین', 'مثل node_modules که دوباره ساخته می‌شوند')}</div>
-          <p class="fine">بالای ۳۰ مگابایت، چند ZIP مستقل ساخته می‌شود.</p>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span id="pjl" data-t="pj.pick"></span></button>
+          <div class="opts">${SW('pjclean', 'pj.clean', 'pj.clean.h')}</div>
+          <p class="fine" data-t="pj.fine"></p>
           <div class="msg" id="msg4"></div>
-          <button class="btn secondary" id="pjdl" hidden>دانلود ZIP ساخته‌شده</button>
+          <button class="btn secondary" id="pjdl" data-t="pj.dl" hidden></button>
         </section>
       </div>
       <div id="prog" hidden>
@@ -234,10 +241,10 @@
         <div class="act" id="act"></div>
         <div class="warns" id="warns"></div>
         <div class="sum" id="sum"></div>
-        <button class="btn secondary back" id="back" hidden>بازگشت</button>
+        <button class="btn secondary back" id="back" data-t="back" hidden></button>
       </div>
     </div>
-    <footer><div class="by"><span id="fmark"></span><span>ساخته‌شده توسط <span class="n" id="fname"></span></span></div><span id="flink"></span></footer>
+    <footer><div class="by"><span id="fmark"></span><span><span data-t="by"></span> <span class="n" id="fname"></span></span></div><span id="flink"></span></footer>
   </section>
 </div>`;
   {
@@ -250,8 +257,6 @@
   $('.fab').prepend(B.mark(30));
   $('#hmark').replaceWith(B.mark(36));
   $('#fmark').replaceWith(B.mark(18));
-  $('#sub').textContent = `${B.name} · نسخه ${B.version}`;
-  $('#fname').textContent = B.nameFa || B.name;
   $('#flink').appendChild(B.link('noiatis.ir'));
 
   const isDark = () => {
@@ -319,22 +324,63 @@
   const setMsg = (id, t, err) => { const m = $(id); m.textContent = t || ''; m.className = 'msg' + (err ? ' err' : ''); };
 
   // Options are remembered; the rows are built from the shared list in options.js
+  let optVals = null;
+  const onOptChange = async (k, v) => { if (optVals) optVals[k] = v; const cur = await loadOpts(); cur[k] = v; await saveOpts(cur); };
+  const buildOpts = () => {
+    O.build($('#o-main'), (x) => x.main, optVals, onOptChange, false);
+    O.build($('#o-more'), (x) => !x.main, optVals, onOptChange, true);
+  };
   (async () => {
     const o = await loadOpts();
-    const onChange = async (k, v) => { const cur = await loadOpts(); cur[k] = v; await saveOpts(cur); };
-    O.build($('#o-main'), (x) => x.main, o, onChange, false);
-    O.build($('#o-more'), (x) => !x.main, o, onChange, true);
+    I.setLang(o.lang);
+    optVals = o;
     const pc = sh.querySelector('[data-k=pjclean]');
     pc.checked = !!o.pjclean;
-    pc.onchange = () => onChange('pjclean', pc.checked);
-    refreshSingle();
+    pc.onchange = () => onOptChange('pjclean', pc.checked);
+    applyLang();
   })();
+
+  // Writes every text of the panel in the current language; also called when the language changes
+  function applyLang() {
+    const en = I.lang === 'en';
+    wrap.classList.toggle('ltr', en);
+    wrap.style.setProperty('--skip', JSON.stringify(t('skipped')));
+    sh.querySelectorAll('[data-t]').forEach((e) => { if (e.dataset.t) e.textContent = t(e.dataset.t); });
+    sh.querySelectorAll('[data-tp]').forEach((e) => { e.placeholder = t(e.dataset.tp); });
+    sh.querySelectorAll('[data-tl]').forEach((e) => { e.title = t(e.dataset.tl); if (e.classList.contains('x')) e.setAttribute('aria-label', e.title); });
+    $('#sub').textContent = `${B.name} · ${t('ver', { v: B.version })}`;
+    $('#fname').textContent = en ? B.name : (B.nameFa || B.name);
+    $('#lang').textContent = t('lang.switch');
+    $('#lang').title = t('lang.title');
+    if (optVals) buildOpts();
+    refreshSingle();
+    ['#msg1', '#msg2', '#msg3', '#msg4'].forEach((id) => setMsg(id, ''));
+    if (listing) { setMsg('#msg2', t('bulk.found', { n: listing.chats.length })); renderList(); }
+    if (imp) renderImp();
+    if (pending) $('#impl').textContent = t('imp.next', { i: pending.i + 1, k: pending.batches.length });
+  }
+  $('#lang').onclick = async () => {
+    I.setLang(I.lang === 'en' ? 'fa' : 'en');
+    const cur = await loadOpts();
+    cur.lang = I.lang;
+    await saveOpts(cur);
+    applyLang();
+  };
+  // The popup can change the language too
+  try {
+    ext.storage.onChanged.addListener((ch, area) => {
+      if (area !== 'local' || !ch.cce || !ch.cce.newValue) return;
+      if (optVals) optVals = Object.assign({}, optVals, ch.cce.newValue);
+      const l = ch.cce.newValue.lang;
+      if (l && l !== I.lang) { I.setLang(l); applyLang(); }
+    });
+  } catch (e) { /* not available after the extension is reloaded */ }
   async function refreshSingle() {
     const id = currentChatId();
     const st = await getState();
     const e = id && st.chats[id];
     const h = sh.querySelector('[data-hint=incremental]');
-    if (h) h.textContent = e && e.exportedAt ? `از آخرین خروجی (${new Date(e.exportedAt).toLocaleDateString('fa-IR')})` : 'از آخرین خروجی همین چت';
+    if (h) h.textContent = e && e.exportedAt ? t('incr.since', { d: I.date(e.exportedAt) }) : t('opt.incremental.h');
   }
 
   const STEPS = {};
@@ -345,7 +391,7 @@
       const box = $('#steps'); box.textContent = '';
       for (const k in STEPS) delete STEPS[k];
       if (!bulk) {
-        for (const [key, label] of CCE.PHASES) {
+        for (const [key, label] of CCE.PHASES) { // labels follow the current language
           const d = document.createElement('div'); d.className = 'step';
           const ic = document.createElement('span'); ic.className = 'ic';
           const lb = document.createElement('span'); lb.className = 'lb'; lb.textContent = label;
@@ -377,7 +423,7 @@
         if (info.phase === 'bulk' && info.total) inner = (info.current || 0) / info.total;
         const pct = Math.min(100, Math.round(((b.current - 1 + inner) / b.total) * 100));
         $('#bar').style.width = pct + '%';
-        rich($('#barl'), ['چت ', { b: b.current }, ' از ', { b: b.total }, ` (${pct}٪) — ${(b.name || '').slice(0, 40)}`]);
+        rich($('#barl'), [t('w.chat'), { b: b.current }, t('w.of'), { b: b.total }, ` (${pct}${I.lang === 'en' ? '%' : '٪'}) — ${(b.name || '').slice(0, 40)}`]);
         $('#act').textContent = text;
         return;
       }
@@ -388,12 +434,12 @@
       if (info.total) {
         const pct = Math.round(((info.current || 0) / info.total) * 100);
         $('#bar').style.width = pct + '%';
-        rich($('#barl'), [(info.phase === 'hash' ? 'فایل ' : 'پیام '), { b: info.current || 0 }, ' از ', { b: info.total }, ` (${pct}٪)`]);
+        rich($('#barl'), [t(info.phase === 'hash' ? 'w.file' : 'w.msg'), { b: info.current || 0 }, t('w.of'), { b: info.total }, ` (${pct}${I.lang === 'en' ? '%' : '٪'})`]);
       } else if (info.phase && info.phase !== 'messages') {
         $('#bar').style.width = '100%';
       }
       if (info.files) {
-        rich($('#filel'), ['فایل‌ها ', { b: `${info.files.done}/${info.files.total}` }, ' · آرتیفکت‌ها ', { b: info.artifacts || 0 }, ' · ساخته‌شده ', { b: info.genFiles || 0 }]);
+        rich($('#filel'), [t('w.files'), { b: `${info.files.done}/${info.files.total}` }, t('w.arts'), { b: info.artifacts || 0 }, t('w.gen'), { b: info.genFiles || 0 }]);
       }
       $('#act').textContent = text;
     }
@@ -403,7 +449,7 @@
         if (active) setState(active, 'done');
         for (const k in STEPS) if (STEPS[k].className === 'step') STEPS[k].className = 'step skipped';
         $('#bar').style.width = '100%'; $('#bar').className = 'bar ok';
-        $('#barl').textContent = 'همه‌ی مراحل کامل شد'; $('#act').textContent = '';
+        $('#barl').textContent = t('all.done'); $('#act').textContent = '';
       } else {
         if (active && STEPS[active]) STEPS[active].className = 'step fail';
         $('#bar').className = 'bar err';
@@ -449,15 +495,15 @@
   // After the extension is updated or reloaded, open tabs keep the old copy of the script and
   // every call to the extension throws "Extension context invalidated". Reloading the page fixes it.
   const alive = () => { try { return !!(ext.runtime && ext.runtime.id); } catch (e) { return false; } };
-  const STALE = 'افزونه به‌روز شده است. این صفحه‌ی claude.ai را یک‌بار رفرش کنید (F5) و دوباره امتحان کنید.';
+  const STALE = () => t('stale');
 
   // Chrome slows down or freezes background tabs (Memory Saver). Holding a Web Lock while working prevents the freeze.
   const keepAwake = (fn) => (navigator.locks ? navigator.locks.request('cce-running', fn) : fn());
 
   const run = (options) => keepAwake(() => runChat(options));
   async function runChat(options) {
-    if (!alive()) throw new Error(STALE);
-    if (running) throw new Error('در حال اجرا…');
+    if (!alive()) throw new Error(STALE());
+    if (running) throw new Error(t('running'));
     running = true;
     PP.reset(false);
     try {
@@ -471,7 +517,7 @@
         res = await CCE.exportChat({ fetchFn: (u, o) => fetch(u, o), origin: location.origin, pathname: location.pathname, cookie: document.cookie, onProgress: notify, options: opts });
       } catch (e) {
         if (e.message === 'NOTHING_NEW') {
-          PP.finish(true, ['چیز جدیدی از آخرین خروجی همین چت نیست.']);
+          PP.finish(true, [t('nothing.new')]);
           return { filename: '', report: [] };
         }
         throw e;
@@ -483,15 +529,15 @@
       }
       const c = res.counts || {};
       PP.finish(true, [
-        'دانلود شد: ' + LRI(res.filename),
-        `پیام‌ها ${c.messages} · فایل‌ها ${c.files} · آرتیفکت‌ها ${c.artifacts} · ساخته‌شده ${c.genFiles}`,
-        res.stats && res.stats.parts ? `بسته‌ی انتقال: ${res.stats.parts} بخش متن، حدود ${kfa(res.stats.estTokens)}` : '',
-        res.stats && res.stats.suggestProject ? 'حجم زیاد است؛ موقع ورود، «بسته‌ی Project» پیشنهاد می‌شود.' : '',
-        res.meta.partial ? 'فقط پیام‌های جدید از آخرین خروجی گرفته شد.' : '',
+        t('downloaded') + LRI(res.filename),
+        t('sum.counts', { m: c.messages, f: c.files, a: c.artifacts, g: c.genFiles }),
+        res.stats && res.stats.parts ? t('sum.transfer', { n: res.stats.parts, k: kfa(res.stats.estTokens) }) : '',
+        res.stats && res.stats.suggestProject ? t('sum.suggest') : '',
+        res.meta.partial ? t('sum.partial') : '',
       ].filter(Boolean));
       return { filename: res.filename, report: res.report };
     } catch (e) {
-      PP.finish(false, [e.message === 'NOT_A_CHAT' ? 'اول یک چت را باز کنید (آدرس /chat/…).' : e.message]);
+      PP.finish(false, [e.message === 'NOT_A_CHAT' ? t('not.chat') : e.message]);
       throw e;
     } finally {
       running = false;
@@ -501,7 +547,7 @@
 
   let listing = null; // {org, chats}
   const sel = new Set();
-  const fmtDate = (s) => { try { return new Date(s).toLocaleDateString('fa-IR'); } catch (e) { return ''; } };
+  const fmtDate = (s) => { try { return I.date(s); } catch (e) { return ''; } };
   let curProject = null;
   let shownIds = [];
   let lastIdx = -1;
@@ -531,14 +577,14 @@
       cb.onchange = () => { cb.checked ? sel.add(c.uuid) : sel.delete(c.uuid); updCount(); };
       const d = document.createElement('div');
       const b = document.createElement('b'); b.textContent = c.name; b.dir = 'auto';
-      if (isChanged(c, st)) { const bd = document.createElement('span'); bd.className = 'badge'; bd.textContent = st.chats[c.uuid] ? 'تغییرکرده' : 'جدید'; b.appendChild(bd); }
+      if (isChanged(c, st)) { const bd = document.createElement('span'); bd.className = 'badge'; bd.textContent = t(st.chats[c.uuid] ? 'badge.changed' : 'badge.new'); b.appendChild(bd); }
       const sm = document.createElement('small'); sm.textContent = fmtDate(c.updated_at);
       d.append(b, sm); r.append(cb, d); frag.appendChild(r);
     }
     box.appendChild(frag);
     updCount();
   }
-  function updCount() { $('#bcnt').textContent = `${sel.size} از ${listing.chats.length} چت انتخاب شده`; $('#bgol').textContent = `پشتیبان‌گیری از ${sel.size} چت`; $('#bgo').disabled = !sel.size; }
+  function updCount() { $('#bcnt').textContent = t('bulk.cnt', { n: sel.size, m: listing.chats.length }); $('#bgol').textContent = t('bulk.go.n', { n: sel.size }); $('#bgo').disabled = !sel.size; }
   async function applyScope(sc) {
     sh.querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x.dataset.sc === sc));
     const st = await getState();
@@ -559,23 +605,24 @@
 
   $('#load').onclick = async () => {
     try {
-      setMsg('#msg2', 'در حال خواندن فهرست چت‌ها…');
+      setMsg('#msg2', t('bulk.reading'));
       listing = await CCE.listChats({ fetchFn: (u, o) => fetch(u, o), origin: location.origin, cookie: document.cookie });
       const pm = location.pathname.match(/\/project\/([0-9a-f-]{36})/i);
       const cur = currentChatId();
       curProject = pm ? pm[1] : (cur && (listing.chats.find((c) => c.uuid === cur) || {}).project_uuid) || null;
       $('#scproj').hidden = !curProject;
       $('#bulkbox').hidden = false;
-      $('#loadl').textContent = 'بارگیری دوباره‌ی فهرست';
-      setMsg('#msg2', `${listing.chats.length} چت پیدا شد.`);
+      $('#loadl').dataset.t = 'bulk.reload';
+      $('#loadl').textContent = t('bulk.reload');
+      setMsg('#msg2', t('bulk.found', { n: listing.chats.length }));
       await applyScope('all');
     } catch (e) { setMsg('#msg2', e.message, true); }
   };
 
   const runBulk = (chats, options, opt2 = {}) => keepAwake(() => runMany(chats, options, opt2));
   async function runMany(chats, options, opt2 = {}) {
-    if (!alive()) throw new Error(STALE);
-    if (running) throw new Error('در حال اجرا…');
+    if (!alive()) throw new Error(STALE());
+    if (running) throw new Error(t('running'));
     running = true;
     PP.reset(true);
     try {
@@ -593,9 +640,9 @@
       st.lastBackup = { at: Date.now(), ok: out.done.length, failed: out.failed.length, auto: !!opt2.auto };
       await putState(st);
       PP.finish(!out.failed.length || !!out.done.length, [
-        `${out.done.length} چت ذخیره شد${out.failed.length ? `، ${out.failed.length} ناموفق` : ''}`,
-        ...out.parts.map((p) => `${LRI(p.filename)} — ${p.chats} چت، ${(p.bytes / 1048576).toFixed(1)}MB`),
-        ...out.failed.slice(0, 5).map((f) => `ناموفق: ${f.chat.name}: ${f.error}`),
+        t('bulk.saved', { n: out.done.length, f: out.failed.length }),
+        ...out.parts.map((p) => t('bulk.part', { file: LRI(p.filename), n: p.chats, mb: (p.bytes / 1048576).toFixed(1) })),
+        ...out.failed.slice(0, 5).map((f) => t('bulk.failed', { name: f.chat.name, err: f.error })),
       ]);
       return out;
     } catch (e) {
@@ -621,7 +668,7 @@
       const st = await getState();
       const chats = l.chats.filter((c) => isChanged(c, st));
       if (!chats.length) {
-        st.lastBackup = { at: Date.now(), ok: 0, failed: 0, auto: true, note: 'چیز جدیدی نبود' };
+        st.lastBackup = { at: Date.now(), ok: 0, failed: 0, auto: true, note: t('bulk.none.new') };
         await putState(st);
         return { ok: true, count: 0 };
       }
@@ -678,14 +725,14 @@
       } catch (e) { console.warn('[CCE] input attach failed, trying paste', e); }
     }
     const comp = findComposer();
-    if (!comp) throw new Error('کادر پیام پیدا نشد. یک چت جدید باز کنید.');
+    if (!comp) throw new Error(t('no.composer'));
     comp.focus();
     comp.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
     await sleep(600);
   }
   async function insertText(text) {
     const comp = findComposer();
-    if (!comp) throw new Error('کادر پیام پیدا نشد. یک چت جدید باز کنید.');
+    if (!comp) throw new Error(t('no.composer'));
     comp.focus();
     const dt = new DataTransfer();
     dt.setData('text/plain', text);
@@ -698,27 +745,27 @@
     }
     if (!(comp.textContent || '').trim()) {
       try { await navigator.clipboard.writeText(text); } catch (e) {}
-      throw new Error('متن در کادر قرار نگرفت؛ در کلیپ‌بورد کپی شد، با Ctrl+V بچسبانید.');
+      throw new Error(t('no.paste'));
     }
   }
   // ---- Import: pick a ZIP, pick the chat (if there are several), pick the way to continue ----
   const TOKEN_LIMIT = 200000; // rough context size of a chat; used only for the meter
   const PROJECT_FROM = 150000; // above this the Project pack is recommended
   const fa = (n) => Math.round(n).toLocaleString('fa-IR');
-  const kfa = (n) => (n >= 1000 ? fa(n / 1000) + ' هزار' : fa(n)) + ' توکن';
+  const kfa = (n) => t('tok', { n });
   const dec = (u8) => new TextDecoder().decode(u8);
   // Save a File through a temporary link
   const saveFile = (f) => { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); };
   let imp = null; // {zip, items:[{mf, manifest}], sel, mode}
 
   async function openZip(file) {
-    setMsg('#msg3', 'در حال خواندن ZIP…');
+    setMsg('#msg3', t('imp.reading'));
     const zip = await CCE.unzip(await file.arrayBuffer());
     const mfs = zip.names.filter((n) => /(^|\/)transfer\/manifest\.json$/.test(n));
-    if (!mfs.length) throw new Error('این ZIP پوشه‌ی transfer ندارد (باید با گزینه‌ی «بسته‌ی انتقال» خروجی گرفته باشید).');
+    if (!mfs.length) throw new Error(t('imp.no.transfer'));
     const items = [];
     for (const mf of mfs) { try { items.push({ mf, manifest: JSON.parse(dec(await zip.read(mf))) }); } catch (e) { /* skip a broken manifest */ } }
-    if (!items.length) throw new Error('فایل manifest.json خوانده نشد.');
+    if (!items.length) throw new Error(t('imp.no.manifest'));
     items.sort((a, b) => String(a.manifest.title).localeCompare(String(b.manifest.title), 'fa'));
     imp = { zip, items, sel: 0, mode: null };
     setMsg('#msg3', '');
@@ -740,7 +787,7 @@
       const [l] = radioRow('row', 'cp', i === imp.sel, () => { imp.sel = i; imp.mode = null; renderModes(); });
       const d = document.createElement('div');
       const b = document.createElement('b'); b.textContent = it.manifest.title || '—';
-      const sm = document.createElement('small'); sm.textContent = `${it.manifest.messages ? fa(it.manifest.messages) + ' پیام · ' : ''}حدود ${kfa(it.manifest.estTokens || 0)}`;
+      const sm = document.createElement('small'); sm.textContent = t('imp.item', { m: it.manifest.messages, k: kfa(it.manifest.estTokens || 0) });
       d.append(b, sm); l.appendChild(d); box.appendChild(l);
     });
   }
@@ -750,17 +797,17 @@
     const bd = m.breakdown;
     $('#meter').className = 'meter' + (est > TOKEN_LIMIT * 0.75 ? ' hot' : '');
     $('#meter').firstChild.style.width = Math.min(100, Math.round((est / TOKEN_LIMIT) * 100)) + '%';
-    rich($('#mlb'), [{ b: kfa(est) }, ` از حدود ${kfa(TOKEN_LIMIT)} ظرفیت یک چت`, bd ? ` (متن ${kfa(bd.text)}${bd.images ? ' · عکس‌ها ' + kfa(bd.images) : ''}${bd.files ? ' · فایل‌ها ' + kfa(bd.files) : ''})` : '']);
+    rich($('#mlb'), [{ b: kfa(est) }, t('meter.of', { k: kfa(TOKEN_LIMIT) }), bd ? t('meter.bd', { text: kfa(bd.text), img: bd.images ? kfa(bd.images) : '', files: bd.files ? kfa(bd.files) : '' }) : '']);
     const box = $('#modes'); box.textContent = '';
     const defs = [
-      ['chat', 'ادامه در چت جدید', 'ساده‌ترین راه. فایل‌ها همین‌جا پیوست می‌شوند و بخشی از ظرفیت چت را پر می‌کنند.', !big],
-      ['project', 'بسته‌ی Project', 'برای چت‌های بزرگ. فایل‌ها به Knowledge یک Project می‌روند و خود چت خالی می‌ماند.', big],
+      ['chat', t('mode.chat'), t('mode.chat.h'), !big],
+      ['project', t('mode.project'), t('mode.project.h'), big],
     ];
-    for (const [v, t, d, rec] of defs) {
+    for (const [v, ttl, d, rec] of defs) {
       const [l] = radioRow('mode' + (imp.mode === v ? ' on' : ''), 'md', imp.mode === v, () => { imp.mode = v; renderModes(); });
       const w = document.createElement('div');
-      const b = document.createElement('b'); b.textContent = t;
-      if (rec) { const r = document.createElement('span'); r.className = 'rec'; r.textContent = 'پیشنهادی'; b.appendChild(r); }
+      const b = document.createElement('b'); b.textContent = ttl;
+      if (rec) { const r = document.createElement('span'); r.className = 'rec'; r.textContent = t('rec'); b.appendChild(r); }
       const sm = document.createElement('small'); sm.textContent = d;
       w.append(b, sm); l.appendChild(w); box.appendChild(l);
     }
@@ -783,7 +830,7 @@
     const manifest = it.manifest, files = [];
     let k = 0;
     for (const a of manifest.attach || []) {
-      setMsg('#msg3', `در حال خواندن فایل‌ها… ${fa(++k)} از ${fa((manifest.attach || []).length)}`);
+      setMsg('#msg3', t('imp.files', { k: ++k, n: (manifest.attach || []).length }));
       files.push(new File([await readAttach(it, a)], a.name, { type: a.mime || CCE.mimeFromName(a.name) }));
     }
     const batches = [];
@@ -799,12 +846,12 @@
   };
   async function attachNextBatch() {
     if (!pending) return;
-    if (!findComposer()) throw new Error('اول یک چت جدید باز کنید (claude.ai/new).');
+    if (!findComposer()) throw new Error(t('imp.new.chat'));
     const { manifest, batches } = pending;
     const k = batches.length, i = pending.i;
     const isLast = i === k - 1;
     renderSeg(i, k, i);
-    setMsg('#msg3', `در حال پیوست دسته ${fa(i + 1)} از ${fa(k)}…`);
+    setMsg('#msg3', t('imp.attaching', { i: i + 1, k }));
     await attachFiles(batches[i]);
     let text;
     if (k === 1) text = manifest.prompt;
@@ -823,12 +870,14 @@
     if (pending.i >= k) {
       pending = null;
       renderSeg(k, k, -1);
-      setMsg('#msg3', `${fa(batches[i].length)} فایل پیوست شد و متن آماده است.\nدکمه‌ی Send را بزنید.`);
-      $('#impl').textContent = 'انتخاب ZIP انتقال';
+      setMsg('#msg3', t('imp.ready.all', { n: batches[i].length }));
+      $('#impl').dataset.t = 'imp.pick';
+      $('#impl').textContent = t('imp.pick');
     } else {
       renderSeg(i + 1, k, -1);
-      setMsg('#msg3', `دسته‌ی ${fa(i + 1)} از ${fa(k)} آماده است.\nSend را بزنید، صبر کنید جواب بیاید، بعد دوباره دکمه‌ی بالا را بزنید.`);
-      $('#impl').textContent = `دسته‌ی بعدی (${fa(pending.i + 1)} از ${fa(k)})`;
+      setMsg('#msg3', t('imp.ready.batch', { i: i + 1, k }));
+      $('#impl').dataset.t = '';
+      $('#impl').textContent = t('imp.next', { i: pending.i + 1, k });
     }
   }
 
@@ -845,7 +894,7 @@
     const z = CCE.makeZip();
     let k = 0;
     for (const a of m.attach || []) {
-      setMsg('#msg3', `در حال آماده‌سازی… ${fa(++k)} از ${fa((m.attach || []).length)}`);
+      setMsg('#msg3', t('pp.preparing', { k: ++k, n: (m.attach || []).length }));
       z.file('knowledge/' + a.name, await readAttach(it, a));
     }
     const ins = imp.zip.names.find((n) => n === root + 'project/instructions.md');
@@ -861,10 +910,10 @@
     try { await Promise.race([navigator.clipboard.writeText(first).then(() => { copied = true; }), sleep(1500)]); } catch (e) { /* not copied */ }
     $('#impflow').hidden = true;
     setMsg('#msg3', [
-      `بسته‌ی Project دانلود شد: ${LRI(name)} (${fmtMB(data.length)})`,
-      '۱) ZIP را باز کنید و یک Project جدید بسازید.',
-      `۲) فایل‌های پوشه‌ی knowledge را در Knowledge بکشید${ins ? ' و 2-INSTRUCTIONS.md را در Instructions بگذارید' : ''}.`,
-      copied ? '۳) در یک چت داخل Project، با Ctrl+V پیام اول را بفرستید (کپی شده است).' : '۳) در یک چت داخل Project، متن فایل 3-FIRST-MESSAGE.md را بفرستید.',
+      t('pp.done', { name: LRI(name), mb: fmtMB(data.length) }),
+      t('pp.s1'),
+      t('pp.s2', { ins: !!ins }),
+      t(copied ? 'pp.s3.copied' : 'pp.s3'),
     ].join('\n'));
   }
   $('#impgo').onclick = async () => {
@@ -919,14 +968,14 @@
       }
       picked.push({ path: rel, file: f }); raw += f.size;
     }
-    if (!picked.length) throw new Error('پوشه خالی است.');
-    if (raw > 1.5 * 1073741824) throw new Error('حجم پوشه بیشتر از ۱٫۵ گیگابایت است؛ مرورگر حافظه‌ی کافی ندارد. پوشه‌های سنگین را کنار بگذارید.');
+    if (!picked.length) throw new Error(t('pj.empty'));
+    if (raw > 1.5 * 1073741824) throw new Error(t('pj.huge'));
     const list = [];
     for (let i = 0; i < picked.length; i++) {
-      if (i % 25 === 0) { setMsg('#msg4', `در حال خواندن فایل‌ها… ${i} از ${picked.length}`); await sleep(0); }
+      if (i % 25 === 0) { setMsg('#msg4', t('pj.reading', { i, n: picked.length })); await sleep(0); }
       list.push({ path: picked[i].path, bytes: new Uint8Array(await picked[i].file.arrayBuffer()) });
     }
-    setMsg('#msg4', 'در حال فشرده‌سازی…');
+    setMsg('#msg4', t('pj.zipping'));
     const out = await packParts(list);
     // Verification: read every ZIP back and compare file count and sizes with the originals
     let n = 0, bad = 0;
@@ -935,7 +984,7 @@
       const u = await CCE.unzip(part.data);
       for (const name of u.names) { n++; if ((await u.read(name)).length !== bySize.get(name)) bad++; }
     }
-    if (n !== list.length || bad) throw new Error('بازبینی ZIP ناموفق بود؛ خروجی ساخته نشد.');
+    if (n !== list.length || bad) throw new Error(t('pj.verify.fail'));
     return { out, count: list.length, skipped, skippedWhat: [...skippedWhat].slice(0, 6), raw, name: (picked[0].path.split('/')[0] || 'project') };
   }
   $('#pj').onclick = () => dirPicker.click();
@@ -953,16 +1002,17 @@
       let where;
       if (findComposer()) {
         for (let i = 0; i < outFiles.length; i += BATCH) await attachFiles(outFiles.slice(i, i + BATCH));
-        where = 'در کادر پیام پیوست شد.';
-      } else { download(); where = 'کادر پیام پیدا نشد؛ ZIP دانلود شد.'; }
+        where = t('pj.where.attached');
+      } else { download(); where = t('pj.where.download'); }
       setMsg('#msg4', [
-        `ساخته شد: ${r.count} فایل (${fmtMB(r.raw)}) ← ${outFiles.length} ZIP (${fmtMB(total)})`,
-        r.skipped ? `کنار گذاشته شد: ${r.skipped} فایل از ${r.skippedWhat.join('، ')}` : 'هیچ فایلی کنار گذاشته نشد',
-        'بازبینی: همه‌ی فایل‌ها با اصل یکی‌اند',
+        t('pj.made', { n: r.count, raw: fmtMB(r.raw), z: outFiles.length, total: fmtMB(total) }),
+        r.skipped ? t('pj.skipped', { n: r.skipped, what: r.skippedWhat }) : t('pj.skipped.none'),
+        t('pj.verified'),
         where,
       ].join('\n'));
     } catch (e) { setMsg('#msg4', e.message, true); }
   };
 
+  applyLang();
   document.documentElement.appendChild(host);
 })();

@@ -5,6 +5,8 @@
 (function (root) {
   'use strict';
 
+  // Interface text (brand.js); outside the extension, the key itself is returned
+  const T = (k, p) => (root.CCE_I18N ? root.CCE_I18N.t(k, p) : k);
   const RENDER = root.CCE_RENDER || (typeof require === 'function' ? require('./render.js') : null);
   const TEXT_EXT = new Set(['txt', 'md', 'csv', 'tsv', 'json', 'yml', 'yaml', 'xml', 'html', 'htm', 'css', 'js', 'jsx', 'ts', 'tsx', 'py', 'sh', 'sql', 'java', 'c', 'cpp', 'h', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt', 'r', 'lua', 'mmd', 'svg', 'toml', 'ini', 'log', 'tex']);
   const extOf = (n) => (String(n).split('/').pop().split('.').length > 1 ? String(n).split('.').pop().toLowerCase() : '');
@@ -195,7 +197,7 @@
       }
       let size = 22;
       for (const it of items) size += 30 + it.e.name.length + it.body.length + 46 + it.e.name.length;
-      if (size > 0xFFFFFFFF - 1024) throw new Error('حجم خروجی از ۴ گیگابایت بیشتر است (ZIP64 پشتیبانی نمی‌شود).');
+      if (size > 0xFFFFFFFF - 1024) throw new Error(T('e.zip64'));
       const out = new Uint8Array(size), v = new DataView(out.buffer);
       let p = 0;
       const offs = [];
@@ -231,13 +233,13 @@
     for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) {
       if (v.getUint32(i, true) === 0x06054b50) { e = i; break; }
     }
-    if (e < 0) throw new Error('فایل ZIP معتبر نیست.');
+    if (e < 0) throw new Error(T('e.zip.invalid'));
     const n = v.getUint16(e + 10, true);
     let p = v.getUint32(e + 16, true);
     const dec = new TextDecoder();
     const ents = new Map();
     for (let i = 0; i < n; i++) {
-      if (v.getUint32(p, true) !== 0x02014b50) throw new Error('ZIP خراب است.');
+      if (v.getUint32(p, true) !== 0x02014b50) throw new Error(T('e.zip.bad'));
       const method = v.getUint16(p + 10, true), csize = v.getUint32(p + 20, true);
       const nl = v.getUint16(p + 28, true), el = v.getUint16(p + 30, true), cl = v.getUint16(p + 32, true);
       const lo = v.getUint32(p + 42, true);
@@ -248,13 +250,13 @@
       names: [...ents.keys()],
       async read(name) {
         const ent = ents.get(name);
-        if (!ent) throw new Error('در ZIP پیدا نشد: ' + name);
+        if (!ent) throw new Error(T('e.zip.missing') + name);
         const nl = v.getUint16(ent.lo + 26, true), el = v.getUint16(ent.lo + 28, true);
         const start = ent.lo + 30 + nl + el;
         const raw = u8.subarray(start, start + ent.csize);
         if (ent.method === 0) return raw;
         if (ent.method === 8) return inflateRaw(raw);
-        throw new Error('روش فشرده‌سازی پشتیبانی نمی‌شود: ' + ent.method);
+        throw new Error(T('e.zip.method') + ent.method);
       },
     };
   }
@@ -291,7 +293,7 @@
 
     const getJson = makeGetJson(fetchFn, origin);
 
-    onProgress('در حال خواندن اطلاعات حساب…', { phase: 'account' });
+    onProgress(T('p.account'), { phase: 'account' });
     let orgIds;
     if (shared && shared.org) orgIds = [shared.org];
     else {
@@ -301,7 +303,7 @@
       if (last) orgIds = [last, ...orgIds.filter((x) => x !== last)];
     }
 
-    onProgress('در حال دریافت متن چت از سرور…', { phase: 'fetch' });
+    onProgress(T('p.fetch'), { phase: 'fetch' });
     let conv = null, org = null, lastErr = null;
     const queries = [
       '?tree=True&rendering_mode=messages&render_all_tools=true',
@@ -317,7 +319,7 @@
         } catch (e) { lastErr = e; }
       }
     }
-    if (!conv) throw new Error('چت پیدا نشد: ' + (lastErr && lastErr.message));
+    if (!conv) throw new Error(T('e.chat.notfound') + (lastErr && lastErr.message));
 
     let msgs = conv.chat_messages || [];
     if (!opt.allBranches && conv.current_leaf_message_uuid) {
@@ -361,7 +363,7 @@
     let project = null;
     const projectId = conv.project_uuid || (conv.project && conv.project.uuid);
     if (opt.includeProject && projectId) {
-      onProgress('در حال دریافت دستورالعمل و فایل‌های Project…', { phase: 'project' });
+      onProgress(T('p.project'), { phase: 'project' });
       try {
         const p = await getJson(`/api/organizations/${org}/projects/${projectId}`);
         project = { name: p.name || 'project', instructions: p.prompt_template || '', description: p.description || '', docs: [] };
@@ -370,16 +372,16 @@
           for (const d of Array.isArray(docs) ? docs : []) {
             if (d && d.content != null) project.docs.push({ name: d.file_name || d.uuid || 'doc', content: d.content });
           }
-        } catch (e) { log('پروژه: فایل‌های knowledge خوانده نشد (' + e.message + ')'); }
+        } catch (e) { log(T('l.proj.knowledge', { e: e.message })); }
         if (project.instructions) put('project/instructions.md', project.instructions);
         for (const d of project.docs) {
           const pth = uniq('project/docs/' + sanitize(d.name, 100));
           put(pth, d.content);
           items.push({ kind: 'project-doc', name: 'Project knowledge: ' + d.name, text: d.content, lang: extOf(d.name), ref: pth });
         }
-        log(`پروژه «${project.name}»: دستورالعمل ${project.instructions ? 'دارد' : 'ندارد'} | ${project.docs.length} سند`);
+        log(T('l.proj.info', { name: project.name, has: !!project.instructions, n: project.docs.length }));
       } catch (e) {
-        log('پروژه: خوانده نشد (' + e.message + ') — اگر چت داخل Project بود، دستورالعمل‌ها را دستی منتقل کنید.');
+        log(T('l.proj.fail', { e: e.message }));
       }
     }
 
@@ -401,7 +403,7 @@
         const oldS = inp.old_str, newS = inp.new_str == null ? '' : inp.new_str;
         const idx = oldS != null ? prev.indexOf(oldS) : -1;
         if (idx >= 0) a.versions.push(prev.slice(0, idx) + newS + prev.slice(idx + oldS.length));
-        else { a.versions.push(prev); log(`پیام ${n}: به‌روزرسانی آرتیفکت «${a.title}» اعمال نشد (old_str پیدا نشد)`); }
+        else { a.versions.push(prev); log(T('l.art.fail', { n, title: a.title })); }
       } else {
         const content = inp.content != null ? inp.content : inp.new_str != null ? inp.new_str : '';
         a.versions.push(content);
@@ -432,10 +434,10 @@
         if (!g) { g = { path, zipPath: uniq(genZipPath(path)), content: '', presented: false, edits: 0 }; gen.set(path, g); }
         g.content = text != null ? text : '';
       } else if (cmd === 'str_replace' || cmd === 'insert') {
-        if (!g) { log(`پیام ${n}: ویرایش فایلی که در این چت ساخته نشده (${path}) — محتوای پایه در دسترس نیست`); return { kind: 'edit-failed', path }; }
+        if (!g) { log(T('l.edit.nobase', { n, path })); return { kind: 'edit-failed', path }; }
         if (cmd === 'str_replace') {
           const idx = oldS != null ? g.content.indexOf(oldS) : -1;
-          if (idx < 0) { log(`پیام ${n}: str_replace روی ${path} اعمال نشد (old_str پیدا نشد)`); return { kind: 'edit-failed', path }; }
+          if (idx < 0) { log(T('l.edit.fail', { n, path })); return { kind: 'edit-failed', path }; }
           g.content = g.content.slice(0, idx) + (newS == null ? '' : newS) + g.content.slice(idx + oldS.length);
         } else {
           const lines = g.content.split('\n');
@@ -505,7 +507,7 @@
           return res;
         } catch (e) { /* try the next URL */ }
       }
-      log(`دانلود فایل ناموفق: ${f.file_name} (${id})`);
+      log(T('l.dl.fail', { name: f.file_name, id }));
       missing.push({ name: f.file_name || id, reason: 'download failed' });
       downloaded.set(id, null);
       return null;
@@ -529,7 +531,7 @@
     const prog = (text) => onProgress(text, { phase: 'messages', current: n, total: msgs.length, files: { done: fileDone, total: totalFiles }, artifacts: artifacts.size, genFiles: gen.size });
     for (const msg of msgs) {
       n++;
-      prog(`پردازش پیام ${n} از ${msgs.length}…`);
+      prog(T('p.msg', { n, total: msgs.length }));
       const isHuman = msg.sender === 'human';
       const role = isHuman ? 'Human' : 'Claude';
       const mdLines = [];
@@ -609,10 +611,10 @@
       }
       const files = (msg.files_v2 && msg.files_v2.length ? msg.files_v2 : msg.files) || [];
       for (const f of files) {
-        prog(`دانلود فایل «${f.file_name || ''}» (${fileDone + 1} از ${totalFiles})…`);
+        prog(T('p.file', { name: f.file_name || '', i: fileDone + 1, total: totalFiles }));
         const r = await downloadFile(f);
         fileDone++;
-        prog(r ? `فایل «${f.file_name || ''}» دانلود شد` : `فایل «${f.file_name || ''}» دانلود نشد`);
+        prog(T(r ? 'p.file.ok' : 'p.file.no', { name: f.file_name || '' }));
         if (r) {
           viewBlocks.push({ t: f.file_kind === 'image' ? 'image' : 'file', name: r.name, path: r.path });
           mdLines.push(f.file_kind === 'image' ? `![${f.file_name}](${r.path})` : `> **File:** [${f.file_name}](${r.path})`, '');
@@ -653,7 +655,7 @@
           break;
         } catch (e) { /* next path */ }
       }
-      if (!ok) { log(`فایل خروجی Claude دانلود نشد: ${base}`); missing.push({ name: base, reason: 'not available for download (Claude output)' }); }
+      if (!ok) { log(T('l.out.fail', { base })); missing.push({ name: base, reason: 'not available for download (Claude output)' }); }
     }
 
     const orderedItems = [];
@@ -701,7 +703,7 @@
 
     let stats = { estTokens: 0, parts: 0, attachFiles: 0 };
     if (doTransfer) {
-      onProgress('در حال ساخت بسته‌ی انتقال (HANDOFF و بخش‌های متن)…', { phase: 'transfer' });
+      onProgress(T('p.transfer'), { phase: 'transfer' });
       const tdir = 'transfer/';
       const PROMPT_TOK = 2500; // the instruction message itself
 
@@ -767,7 +769,7 @@
             const joined = `${it.name}.zip`;
             const how = pieces.length > 1 ? ` Join the parts in order (cat ${joined}.* > ${joined}) and unzip.` : ' Unzip it to get the original file.';
             inlineBlocks.push(`### FILE: ${label}\n\n(binary file larger than ${Math.round(opt.maxFileBytes / 1048576)}MB — attached as ${names.map((n) => '"' + n + '"').join(', ')}.${how})`);
-            log(`${it.name}: بزرگ‌تر از سقف بود؛ ${pieces.length > 1 ? 'در ' + pieces.length + ' تکه' : 'فشرده'} به بسته‌ی انتقال رفت.`);
+            log(T('l.big', { name: it.name, pieces: pieces.length }));
           } else {
             const nm = attachName(it.name);
             attach.push({ rel: 'files/' + nm, name: nm, data: it.buf, bytes: it.buf.byteLength, ref: it.zp || null });
@@ -777,7 +779,7 @@
           }
         }
       }
-      if (skipped.length > missing.length) log(`${skipped.length - missing.length} فایل طبق گزینه‌ها وارد بسته‌ی انتقال نشد (عکس‌ها/صوت/ویدئو). در خروجی کامل موجودند.`);
+      if (skipped.length > missing.length) log(T('l.left.out', { n: skipped.length - missing.length }));
 
       // Inline files may use at most half of the budget; if they exceed it, the largest ones become separate attachments
       const budget = opt.tokenBudget;
@@ -838,7 +840,7 @@
       const nonText = imgTok + fileTok + PROMPT_TOK;
       let level = 0, transcript = buildTranscript(0), trTok = sumTok(transcript);
       while (level < 4 && fixedTok + trTok + nonText > budget) { level++; transcript = buildTranscript(level); trTok = sumTok(transcript); }
-      if (level) log(`متن از سقف ${budget >= 1e9 ? '' : opt.tokenBudget + ' توکن '}بیشتر بود؛ فقط بخش‌های کم‌اهمیت قدیمی کوتاه شد (سطح ${level} از ۴${shortened ? '، ' + shortened + ' پیام کوتاه‌شده' : ''}). پیام‌های خودتان (جز موارد بسیار بلند) دست‌نخورده‌اند.`);
+      if (level) log(T('l.shrunk', { cap: budget >= 1e9 ? '' : opt.tokenBudget, level, shortened }));
 
       const blocks = [head];
       if (projBlock) blocks.push(projBlock);
@@ -916,21 +918,7 @@
 
       dir.file(tdir + 'HANDOFF.md', prompt + '\n');
       dir.file(tdir + 'ATTACH-LIST.txt', [...partNames.map((n) => 'transfer/' + n), ...attachList.filter((a) => !partNames.includes(a.name)).map((a) => (a.ref ? a.ref : 'transfer/' + a.path))].join('\n') + '\n');
-      dir.file(tdir + 'HOW-TO-IMPORT.txt', [
-        'روش خودکار (توصیه می‌شود):',
-        '۱) در اکانت جدید claude.ai یک چت جدید باز کنید (یا داخل یک Project).',
-        '۲) دکمه‌ی گرد نویاتیس ← تب «ورود» ← «انتخاب ZIP انتقال» و همین فایل ZIP را انتخاب کنید.',
-        '۳) فایل‌ها پیوست و متن آماده در کادر پیام قرار می‌گیرد؛ فقط Send را بزنید.',
-        '   اگر حجم زیاد باشد، افزونه «بسته‌ی Project» را پیشنهاد می‌دهد.',
-        '',
-        'روش دستی:',
-        '۱) همه‌ی فایل‌های فهرست‌شده در ATTACH-LIST.txt را به چت جدید پیوست کنید.',
-        '۲) محتوای HANDOFF.md را به‌عنوان پیام بچسبانید و بفرستید.',
-        '',
-        'اگر محدودیت تعداد/حجم فایل پر شد: یک Project جدید بسازید، فایل‌ها را در Knowledge آن بگذارید،',
-        'و محتوای HANDOFF.md را در اولین پیام یک چت داخل همان Project بفرستید.',
-        project ? 'دستورالعمل‌های پروژه‌ی قبلی در پوشه‌ی project/ هست؛ آن را در Instructions پروژه‌ی جدید بگذارید.' : '',
-      ].join('\n'));
+      dir.file(tdir + 'HOW-TO-IMPORT.txt', [].concat(T('howto', { project: !!project })).join('\n'));
       dir.file(tdir + 'manifest.json', JSON.stringify({
         format: 'cce-transfer/1', title, convId, parts: N, messages: msgs.length, estTokens, breakdown, level, shortened,
         prompt, projectPrompt: mkPrompt(true), attach: attachList, skipped,
@@ -938,11 +926,11 @@
       }, null, 2));
 
       stats = { estTokens, parts: N, attachFiles: attachList.length, breakdown, level, shortened, suggestProject: estTokens > 150000 };
-      log(`بسته‌ی انتقال: ${N} بخش متن + ${attach.length} فایل جدا | حدود ${estTokens} توکن${imgTok || fileTok ? ` (متن ${textTok}${imgTok ? ' · عکس‌ها ' + imgTok : ''}${fileTok ? ' · فایل‌ها ' + fileTok : ''})` : ''}`);
-      if (stats.suggestProject) log('حجم از حدود ۱۵۰ هزار توکن بیشتر است. هنگام ورود، افزونه «بسته‌ی Project» را پیشنهاد می‌دهد (چت جدید پر نمی‌شود).');
+      log(T('l.pack', { N, att: attach.length, est: estTokens, img: imgTok, file: fileTok, text: textTok }));
+      if (stats.suggestProject) log(T('l.pack.suggest'));
     }
 
-    log(`پیام‌ها: ${msgs.length} | فایل‌ها: ${[...downloaded.values()].filter(Boolean).length}/${downloaded.size} | آرتیفکت‌ها: ${artifacts.size} | فایل‌های ساخته‌شده: ${gen.size}`);
+    log(T('l.totals', { m: msgs.length, f: [...downloaded.values()].filter(Boolean).length, ft: downloaded.size, a: artifacts.size, g: gen.size }));
     put('export-report.txt', report.join('\n'));
 
     // Hash of every file in export-manifest.json so the ZIP can be verified later
@@ -952,23 +940,23 @@
       lastMessageUuid: msgs.length ? msgs[msgs.length - 1].uuid : null,
       counts: { messages: msgs.length, files: fileDone, artifacts: artifacts.size, genFiles: gen.size },
     };
-    if (shared) { onProgress('تمام شد', { phase: 'done' }); return { meta, report, stats }; }
-    onProgress('در حال محاسبه‌ی هش فایل‌ها…', { phase: 'hash', current: 0, total: zip.entries.length });
+    if (shared) { onProgress(T('p.done'), { phase: 'done' }); return { meta, report, stats }; }
+    onProgress(T('p.hash'), { phase: 'hash', current: 0, total: zip.entries.length });
     const man = [];
     let hi = 0;
     for (const e of zip.entries) {
       hi++;
-      if (hi % 10 === 0) onProgress(`هش فایل ${hi} از ${zip.entries.length}…`, { phase: 'hash', current: hi, total: zip.entries.length });
+      if (hi % 10 === 0) onProgress(T('p.hash.n', { i: hi, n: zip.entries.length }), { phase: 'hash', current: hi, total: zip.entries.length });
       let sha = null;
       try { if (typeof crypto !== 'undefined' && crypto.subtle) sha = toHex(await crypto.subtle.digest('SHA-256', e.data)); } catch (err) { /* the hash is optional */ }
       man.push({ path: e.path.slice(rootName.length + 1), bytes: e.data.length, sha256: sha });
     }
     dir.file('export-manifest.json', JSON.stringify({ title, convId, exportedAt: new Date().toISOString(), files: man }, null, 2));
 
-    onProgress('در حال فشرده‌سازی و ساخت فایل ZIP…', { phase: 'zip' });
+    onProgress(T('p.zip'), { phase: 'zip' });
     const data = await zip.generate();
     const date = new Date().toISOString().slice(0, 10);
-    onProgress('تمام شد', { phase: 'done' });
+    onProgress(T('p.done'), { phase: 'done' });
     return { data, filename: `${rootName}_${date}${partial ? '_new' : ''}.zip`, report, stats, meta, counts: meta.counts, lastMessageUuid: meta.lastMessageUuid, updatedAt: conv.updated_at, convId };
   }
 
@@ -998,13 +986,13 @@
           if (!added || arr.length < 100) break;
         }
         const chats = [...seen.values()].map((c) => ({
-          uuid: c.uuid, name: c.name || '(بدون عنوان)', updated_at: c.updated_at, created_at: c.created_at,
+          uuid: c.uuid, name: c.name || T('untitled'), updated_at: c.updated_at, created_at: c.created_at,
           project_uuid: c.project_uuid || (c.project && c.project.uuid) || null, model: c.model,
         })).sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')));
         return { org, chats };
       } catch (e) { lastErr = e; }
     }
-    throw new Error('فهرست چت‌ها خوانده نشد: ' + (lastErr && lastErr.message));
+    throw new Error(T('e.list') + (lastErr && lastErr.message));
   }
 
   // Several chats in one ZIP (or several ZIPs under a size cap) with a searchable index.html.
@@ -1019,7 +1007,7 @@
       if (options.assets) for (const f in options.assets) zip.file('assets/' + f, options.assets[f]);
       zip.file('index.html', RENDER.indexHtml({ entries, brand: options.brand, title: 'Claude backup — ' + date, assetBase: options.assets ? 'assets/' : null }));
       zip.file('index.json', JSON.stringify(entries, null, 2));
-      onProgress('در حال فشرده‌سازی ZIP…', { phase: 'bulk-zip', bulk: { current: done.length, total: chats.length } });
+      onProgress(T('p.bulk.zip'), { phase: 'bulk-zip', bulk: { current: done.length, total: chats.length } });
       const data = await zip.generate();
       const filename = `Claude-backup_${date}${final && part === 1 ? '' : '_part' + part}.zip`;
       const info = { data, filename, chats: entries.length };
@@ -1030,7 +1018,7 @@
     for (let i = 0; i < chats.length; i++) {
       const chat = chats[i];
       const bulk = { current: i + 1, total: chats.length, name: chat.name };
-      onProgress(`چت ${i + 1} از ${chats.length}: ${chat.name}`, { phase: 'bulk', bulk });
+      onProgress(T('p.bulk.chat', { i: i + 1, n: chats.length, name: chat.name }), { phase: 'bulk', bulk });
       let res = null, err = null;
       for (let attempt = 0; attempt < 2 && !res; attempt++) {
         try {
@@ -1048,7 +1036,7 @@
         if (bytes > maxZipBytes) await flush(false);
       } else {
         failed.push({ chat, error: err && err.message });
-        onProgress(`چت «${chat.name}» ناموفق بود: ${err && err.message}`, { log: true, error: true });
+        onProgress(T('l.bulk.fail', { name: chat.name, err: err && err.message }), { log: true, error: true });
       }
       // No pause between chats: Chrome throttles timers in background tabs by up to a minute; just yield to the event loop
       await Promise.resolve();
@@ -1057,8 +1045,8 @@
     return { parts, done, failed };
   }
 
-  const PHASES = [['account', 'خواندن اطلاعات حساب'], ['fetch', 'دریافت متن چت'], ['project', 'اطلاعات Project'], ['messages', 'پردازش پیام‌ها و دانلود فایل‌ها'], ['transfer', 'ساخت بسته‌ی انتقال'], ['hash', 'محاسبه‌ی هش فایل‌ها'], ['zip', 'ساخت ZIP']];
-  const api = { PHASES, makeZip, listChats, exportMany, exportChat, unzip, sanitize, artifactExt, mimeFromName, redactText, redactPII, estTok, imageDims, isTextName };
+  const PHASE_KEYS = ['account', 'fetch', 'project', 'messages', 'transfer', 'hash', 'zip'];
+  const api = { get PHASES() { return PHASE_KEYS.map((k) => [k, T('phase.' + k)]); }, makeZip, listChats, exportMany, exportChat, unzip, sanitize, artifactExt, mimeFromName, redactText, redactPII, estTok, imageDims, isTextName };
   root.CCE = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -1,5 +1,6 @@
 // Run: node test/core.test.js  (Node 20+)
 const assert = require('assert');
+require('../src/brand.js'); // interface text; sets globalThis.CCE_I18N
 const CCE = require('../src/core.js');
 const R = require('../src/render.js');
 
@@ -204,6 +205,54 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   L = await runL(30000);
   assert(L.man.level >= 3 && L.man.shortened > 0, 'long older replies shortened only when needed');
   assert(L.ctx.includes('سوال 0 ' + 'ب'.repeat(300)), 'human messages still whole at level 3');
+
+  // ---- Interface language: Persian and English ----
+  const fs = require('fs'), path = require('path');
+  const I = globalThis.CCE_I18N, OPT = require('../src/options.js');
+  const HAS_FA = /[\u0600-\u06FF]/;
+  const srcOf = (f) => fs.readFileSync(path.join(__dirname, '../src', f), 'utf8');
+  // Every key used in code or markup exists in both languages
+  const used = new Set();
+  for (const f of ['content.js', 'core.js', 'popup.js', 'render.js', 'options.js']) for (const m of srcOf(f).matchAll(/\b[tT]\('([\w.]+)'/g)) used.add(m[1]);
+  for (const f of ['content.js', 'popup.html']) for (const m of srcOf(f).matchAll(/data-t[pl]?="([\w.]+)"/g)) used.add(m[1]);
+  for (const f of ['content.js']) for (const m of srcOf(f).matchAll(/SW\('pjclean', '([\w.]+)', '([\w.]+)'\)/g)) { used.add(m[1]); used.add(m[2]); }
+  for (const o of OPT.OPTS) { used.add('opt.' + o.k); used.add('opt.' + o.k + '.h'); used.add(OPT.GROUPS[o.g]); for (const [, k] of o.choices || []) used.add(k); }
+  for (const k of ['account', 'fetch', 'project', 'messages', 'transfer', 'hash', 'zip']) used.add('phase.' + k);
+  const bag = Object.fromEntries(['n', 'm', 'f', 'a', 'g', 'k', 'i', 'v', 'd', 'e', 'ok', 'failed', 'note', 'file', 'mb', 'name', 'err', 'id', 'path', 'title', 'base', 'pieces', 'cap', 'level', 'shortened', 'N', 'att', 'est', 'img', 'text', 'files', 'ft', 'total', 'raw', 'z'].map((k) => [k, 3]));
+  Object.assign(bag, { has: true, ins: true, project: true, what: ['a', 'b'] });
+  for (const lang of ['fa', 'en']) {
+    I.setLang(lang);
+    for (const k of [...used].filter((x) => !x.endsWith('.'))) { // keys built from a prefix are covered below
+      const v = I.t(k, bag);
+      assert(v !== k, `missing ${lang} text for ${k}`);
+      const s = [].concat(v).join('\n');
+      assert(!/undefined|NaN|\{\w+\}/.test(s), `bad placeholder in ${lang}:${k}`);
+      // The language switch names the other language, so it is the one Persian text allowed in English
+      if (lang === 'en' && !k.startsWith('lang.')) assert(s.trim().length > 0 && !HAS_FA.test(s), `English text for ${k}`);
+      if (lang === 'fa' && !k.startsWith('lang.')) assert(HAS_FA.test(s), `Persian text for ${k}`);
+    }
+  }
+  // Switching back and forth gives the same text; an unknown language falls back to Persian
+  I.setLang('en'); const enTxt = I.t('tab.single'); I.setLang('fa'); const faTxt = I.t('tab.single');
+  assert(enTxt === 'This chat' && faTxt === 'این چت');
+  I.setLang('xx'); assert.strictEqual(I.lang, 'fa');
+  // Files created by the extension follow the language
+  I.setLang('en');
+  const seenEn = [];
+  res = await CCE.exportChat({ fetchFn, origin: 'https://claude.ai', pathname: '/chat/' + mkId(1), onProgress: (x) => seenEn.push(x), options: { brand: { name: 'Noiatis', nameFa: 'نویاتیس', url: 'https://example.com/' } } });
+  z = await CCE.unzip(res.data);
+  const vEn = await read(z, (n) => n.endsWith('/viewer.html'));
+  assert(vEn.includes('<html lang="en" dir="ltr">') && vEn.includes('Search this chat') && !vEn.includes('نویاتیس'));
+  const howEn = await read(z, (n) => n.endsWith('transfer/HOW-TO-IMPORT.txt'));
+  assert(howEn.includes('Automatic way') && !HAS_FA.test(howEn));
+  assert(seenEn.length && seenEn.every((x) => !HAS_FA.test(x)), 'progress text is English');
+  assert(CCE.PHASES[0][1] === 'Reading account info');
+  const idxEn = R.indexHtml({ entries: [{ title: 'a', folder: 'a', messages: 2, viewer: true }], brand: { name: 'Noiatis' } });
+  assert(idxEn.includes('<html lang="en" dir="ltr">') && idxEn.includes('Last changed'));
+  I.setLang('fa');
+  const vFa = R.indexHtml({ entries: [], brand: { name: 'Noiatis' } });
+  assert(vFa.includes('<html lang="fa" dir="rtl">') && vFa.includes('آخرین تغییر'));
+  assert(CCE.PHASES[0][1] === 'خواندن اطلاعات حساب');
 
   // No emoji in the output
   const md1 = await read(z, (n) => n.endsWith('/conversation.md'));

@@ -13,6 +13,9 @@
   header{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
   header b{display:block;font-size:15px;font-weight:600;line-height:1.3}
   header small{color:var(--mut);font-size:12px}
+  header .ht{flex:1;min-width:0}
+  #lang{flex:none;font:inherit;font-size:12px;font-weight:600;color:var(--fg);background:var(--bg);border:1px solid var(--ctl);border-radius:6px;min-height:28px;padding:2px 10px;cursor:pointer}
+  #lang:hover{background:var(--soft)}
   main{padding:8px 16px 14px;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden}
   header,footer,.act{flex:none}
   .act{padding:12px 16px 4px;border-bottom:1px solid var(--line)}
@@ -25,6 +28,8 @@
   .sw i::after{content:"";position:absolute;top:2px;right:2px;width:13px;height:13px;border-radius:50%;background:var(--ctl)}
   .sw input:checked + i{background:var(--acc);border-color:var(--acc)}
   .sw input:checked + i::after{background:#1b1917;transform:translateX(-14px)}
+  [dir=ltr] .sw i::after{right:auto;left:2px}
+  [dir=ltr] .sw input:checked + i::after{transform:translateX(14px)}
   .sw input:focus-visible + i,select:focus-visible,#go:focus-visible,#all:focus-visible,a:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
   .sw .tx{display:flex;flex-direction:column;min-width:0;padding:3px 0}
   .sw .tx b{font-size:13px;font-weight:600;line-height:1.5} .sw .tx small{color:var(--mut);font-size:11.5px;line-height:1.6}
@@ -49,25 +54,25 @@
 </style>
 </head>
 <body>
-  <header><span id="hmark"></span><div><b>Claude Chat Exporter</b><small id="sub"></small></div></header>
+  <header><span id="hmark"></span><div class="ht"><b>Claude Chat Exporter</b><small id="sub"></small></div><button id="lang" type="button"></button></header>
   <section class="act">
-    <button id="go">دانلود ZIP از چت فعلی</button>
-    <button id="all">پشتیبان‌گیری از همه‌ی چت‌ها…</button>
+    <button id="go" data-t="pop.go"></button>
+    <button id="all" data-t="pop.all"></button>
     <div id="trk"><div id="bar"></div></div>
     <div id="st" role="status" aria-live="polite"></div>
   </section>
   <main>
     <div id="opts"></div>
 
-    <h2>پشتیبان‌گیری خودکار (چت‌های جدید/تغییرکرده)</h2>
-    <div class="row"><span>تکرار</span>
-      <select id="sched"><option value="off">خاموش</option><option value="daily">روزانه</option><option value="weekly">هفتگی</option></select></div>
+    <h2 data-t="pop.auto"></h2>
+    <div class="row"><span data-t="pop.repeat"></span>
+      <select id="sched"><option value="off" data-t="pop.off"></option><option value="daily" data-t="pop.daily"></option><option value="weekly" data-t="pop.weekly"></option></select></div>
     <div class="tip" id="last"></div>
-    <div class="tip">فقط وقتی اجرا می‌شود که مرورگر باز و claude.ai وارد شده باشد.</div>
+    <div class="tip" data-t="pop.tip1"></div>
 
-    <div class="tip">ورود به اکانت جدید را هم از دکمه‌ی گرد نویاتیس در گوشه‌ی صفحه‌ی claude.ai انجام می‌دهید.</div>
+    <div class="tip" data-t="pop.tip2"></div>
   </main>
-  <footer><div class="by"><span id="fmark"></span><span>ساخته‌شده توسط <span class="n" id="fname"></span></span></div><span id="flink"></span></footer>
+  <footer><div class="by"><span id="fmark"></span><span><span data-t="by"></span> <span class="n" id="fname"></span></span></div><span id="flink"></span></footer>
   <script src="options.js"></script>
   <script src="brand.js"></script>
   <script src="popup.js"></script>

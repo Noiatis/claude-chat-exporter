@@ -1,39 +1,64 @@
 const ext = typeof browser !== 'undefined' ? browser : chrome;
 const B = window.CCE_BRAND;
+const I = window.CCE_I18N;
+const t = (k, v) => I.t(k, v);
 const $ = (i) => document.getElementById(i);
 const st = $('st'), go = $('go'), bar = $('bar'), trk = $('trk');
 const say = (t, err) => { st.textContent = t; st.className = err ? 'err' : ''; };
 
 $('hmark').replaceWith(B.mark(36));
 $('fmark').replaceWith(B.mark(18));
-$('sub').textContent = `${B.name} · نسخه ${B.version}`;
-$('fname').textContent = B.nameFa || B.name;
 $('flink').appendChild(B.link('noiatis.ir'));
 
 const O = window.CCE_OPTS;
 const DEF = O.defaults();
 let vals = Object.assign({}, DEF);
+let lastInfo = null;
 const saveAll = async () => { try { const r = await ext.storage.local.get('cce'); await ext.storage.local.set({ cce: Object.assign({}, r.cce || {}, vals) }); } catch (e) {} };
 const readOpts = () => Object.assign({}, vals);
+
+// Writes every text of the popup in the current language and builds the option rows again
+function applyLang() {
+  const en = I.lang === 'en';
+  document.documentElement.lang = en ? 'en' : 'fa';
+  document.documentElement.dir = en ? 'ltr' : 'rtl';
+  document.querySelectorAll('[data-t]').forEach((e) => { e.textContent = t(e.dataset.t); });
+  $('sub').textContent = `${B.name} · ${t('ver', { v: B.version })}`;
+  $('fname').textContent = en ? B.name : (B.nameFa || B.name);
+  $('lang').textContent = t('lang.switch');
+  $('lang').title = t('lang.title');
+  O.build($('opts'), () => true, vals, (k, v) => { vals[k] = v; saveAll(); }, true);
+  showLast();
+}
+function showLast() {
+  const last = lastInfo;
+  if (!last) { $('last').textContent = ''; return; }
+  const d = I.dateTime(last.at);
+  $('last').textContent = last.error ? t('pop.last.err', { d, e: last.error }) : t('pop.last', { d, ok: last.ok, failed: last.failed, note: last.note });
+}
+$('lang').onclick = async () => {
+  I.setLang(I.lang === 'en' ? 'fa' : 'en');
+  try { const r = await ext.storage.local.get('cce'); await ext.storage.local.set({ cce: Object.assign({}, r.cce || {}, { lang: I.lang }) }); } catch (e) {}
+  applyLang();
+};
 
 (async () => {
   let o = DEF, sched = 'off', last = null;
   try {
     const r = await ext.storage.local.get(['cce', 'cceSched', 'cceState']);
     o = Object.assign({}, DEF, r.cce || {});
+    I.setLang(o.lang);
     vals = Object.assign({}, o);
+    delete vals.lang;
     sched = (r.cceSched && r.cceSched.every) || 'off';
     last = r.cceState && r.cceState.lastBackup;
   } catch (e) {}
-  O.build($('opts'), () => true, vals, (k, v) => { vals[k] = v; saveAll(); }, true);
+  lastInfo = last;
+  applyLang();
   $('sched').value = sched;
   $('sched').onchange = async () => {
     try { await ext.storage.local.set({ cceSched: { every: $('sched').value } }); await ext.runtime.sendMessage({ type: 'schedule' }); } catch (e) {}
   };
-  if (last) {
-    const d = new Date(last.at).toLocaleString('fa-IR');
-    $('last').textContent = last.error ? `آخرین تلاش: ${d}. خطا: ${last.error}` : `آخرین پشتیبان: ${d} — ${last.ok} چت${last.failed ? ` (${last.failed} ناموفق)` : ''}${last.note ? ' — ' + last.note : ''}`;
-  }
 })();
 
 ext.runtime.onMessage.addListener((m) => {
@@ -49,7 +74,7 @@ ext.runtime.onMessage.addListener((m) => {
 // Inject it here so the user does not have to reload the page.
 async function claudeTab() {
   const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !/^https:\/\/claude\.ai\//.test(tab.url || '')) throw new Error('این تب، claude.ai نیست.');
+  if (!tab || !/^https:\/\/claude\.ai\//.test(tab.url || '')) throw new Error(t('pop.notab'));
   try {
     await ext.tabs.sendMessage(tab.id, { type: 'ping' });
   } catch (e) {
@@ -71,16 +96,16 @@ $('all').onclick = async () => {
 go.onclick = async () => {
   go.disabled = true;
   bar.style.width = '0';
-  say('در حال شروع…');
+  say(t('pop.starting'));
   try {
     const tab = await claudeTab();
     const options = readOpts();
     await saveAll();
     const r = await ext.tabs.sendMessage(tab.id, { type: 'export', options });
-    if (!r) throw new Error('صفحه را رفرش کنید و دوباره امتحان کنید.');
-    if (!r.ok) throw new Error(r.error === 'NOT_A_CHAT' ? 'اول یک چت را باز کنید (آدرس /chat/…).' : r.error);
+    if (!r) throw new Error(t('pop.reload'));
+    if (!r.ok) throw new Error(r.error === 'NOT_A_CHAT' ? t('not.chat') : r.error);
     bar.style.width = '100%';
-    say(r.filename ? 'ذخیره شد: ⁦' + r.filename + '⁩' : 'از آخرین خروجی چیز تازه‌ای نیست.');
+    say(r.filename ? t('pop.saved') + '⁦' + r.filename + '⁩' : t('pop.nonew'));
   } catch (e) {
     say(e.message, true);
   } finally {
