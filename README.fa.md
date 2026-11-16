@@ -27,6 +27,14 @@
 
 ---
 
+## 📸 تصاویر
+
+| این چت | ورود |
+|---|---|
+| <img src="docs/store-assets/panel-single.png" alt="گزینه‌های خروجی یک چت" width="300"> | <img src="docs/store-assets/panel-import.png" alt="ورود: انتخاب چت و روش ادامه" width="300"> |
+
+---
+
 ## 🚀 نصب
 
 - 🏪 **فروشگاه:** به‌زودی

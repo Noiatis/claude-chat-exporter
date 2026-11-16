@@ -29,6 +29,14 @@ Unofficial browser extension for **Chrome and Firefox** to export your [claude.a
 
 ---
 
+## 📸 Screenshots
+
+| This chat | Import |
+|---|---|
+| <img src="docs/store-assets/panel-single.png" alt="Export options for one chat" width="300"> | <img src="docs/store-assets/panel-import.png" alt="Import: pick a chat and how to continue" width="300"> |
+
+---
+
 ## 🚀 Install
 
 - 🏪 **Store:** coming soon
