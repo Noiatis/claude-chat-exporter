@@ -145,6 +145,66 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   z = await CCE.unzip(res.data);
   assert(z.names.some((n) => n.endsWith('/files/shot.webp')) && !z.names.some((n) => n.endsWith('/files/shot.png')), 'webp renamed');
 
+  // ---- 2.9: token estimate, phone/e-mail redaction, image/media options, no duplicate files, shrink ladder ----
+  assert(CCE.estTok('سلام دنیا سلام دنیا سلام') > CCE.estTok('hello world hello worl'), 'Persian costs more tokens per character');
+  assert.strictEqual(CCE.redactPII('a@b.com 09123456789 ۰۹۱۲۳۴۵۶۷۸۹ +98 912 345 6789 v2.8.3 2026-11-15'), '[EMAIL] [PHONE] [PHONE] [PHONE] v2.8.3 2026-11-15');
+  const pngOf = (w, h) => { const u = new Uint8Array(40); u.set([0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82]); const dv = new DataView(u.buffer); dv.setUint32(16, w); dv.setUint32(20, h); return u; };
+  assert.deepStrictEqual(CCE.imageDims(pngOf(800, 600)), [800, 600]);
+
+  const mc = mkConv(9);
+  mc.chat_messages[0].content[0].text = 'تماس: me@example.com یا 09123456789';
+  mc.chat_messages[0].files = [
+    { file_kind: 'image', file_uuid: 'i-1', file_name: 'a.png', preview_url: '/img/a' },
+    { file_kind: 'image', file_uuid: 'i-2', file_name: 'b.png', preview_url: '/img/b' },
+    { file_kind: 'blob', file_uuid: 'm-1', file_name: 'voice.mp3', path: '/mnt/user-data/uploads/voice.mp3' },
+  ];
+  const mf = async (url, o) => {
+    if (url.includes('/img/')) return { ok: true, headers: { get: () => 'image/png' }, arrayBuffer: async () => pngOf(800, 600).buffer };
+    if (url.includes('voice.mp3')) return { ok: true, headers: { get: () => 'audio/mpeg' }, arrayBuffer: async () => new Uint8Array(3000).buffer };
+    if (/chat_conversations\/[0-9a-f-]{36}/.test(url)) return { ok: true, headers: { get: () => 'application/json' }, json: async () => mc };
+    return fetchFn(url, o);
+  };
+  const run9 = async (options) => { const r = await CCE.exportChat({ fetchFn: mf, origin: 'https://claude.ai', pathname: '/chat/' + mkId(9), options }); const zz = await CCE.unzip(r.data); return { r, zz, man: JSON.parse(await read(zz, (n) => n.endsWith('transfer/manifest.json'))) }; };
+  let t9 = await run9({});
+  const aEntry = t9.man.attach.find((a) => a.name === 'a.png');
+  assert(aEntry && /^files\/a\.png$/.test(aEntry.ref), 'image attached by reference');
+  assert(!t9.zz.names.some((n) => n.includes('/transfer/files/a.png')), 'image not stored twice');
+  assert(t9.zz.names.some((n) => n.endsWith('/files/a.png')), 'original kept in files/');
+  assert(t9.man.skipped.some((x) => x.name === 'voice.mp3'), 'audio skipped by default');
+  assert(t9.man.breakdown.images > 0 && t9.man.estTokens >= t9.man.breakdown.text + t9.man.breakdown.images, 'images counted in the estimate');
+  assert(JSON.parse(await read(t9.zz, (n) => n.endsWith('/conversation.json'))).cce_file_map.some((m) => m.original === 'a.png' && m.saved === 'files/a.png'), 'file name map');
+  assert(t9.man.projectPrompt.includes('Project'), 'project prompt');
+  t9 = await run9({ imageMode: 'none', includeMedia: true });
+  assert(t9.man.skipped.some((x) => x.name === 'a.png') && !t9.man.skipped.some((x) => x.name === 'voice.mp3'), 'image option none / media option on');
+  assert(t9.man.attach.some((a) => a.name === 'voice.mp3'));
+  t9 = await run9({ redactPII: true });
+  const ctx9 = await read(t9.zz, (n) => /transfer\/context-part-01/.test(n));
+  assert(ctx9.includes('[EMAIL]') && ctx9.includes('[PHONE]') && !ctx9.includes('me@example.com'), 'PII redacted');
+
+  // Shrink ladder: tool lines go first, then long older Claude replies; the user's own messages and the last 12 messages stay whole
+  const lc = mkConv(10, { updated_at: '2026-11-10T10:00:00Z' }); lc.chat_messages = []; let lp = '0';
+  const addL = (sender, content) => { const id = 'L' + lc.chat_messages.length; lc.chat_messages.push({ uuid: id, parent_message_uuid: lp, sender, created_at: '2026-11-01T10:00:00Z', content, attachments: [], files_v2: [] }); lp = id; };
+  for (let i = 0; i < 30; i++) {
+    addL('human', [{ type: 'text', text: `سوال ${i} ` + 'ب'.repeat(300) }]);
+    addL('assistant', [
+      { type: 'tool_use', name: 'web_search', input: { query: 'q' + i } },
+      { type: 'tool_result', name: 'web_search', content: [{ url: 'https://e.com/' + i, title: 't' + i }] },
+      { type: 'text', text: `پاسخ ${i} ` + 'ا'.repeat(6000) },
+    ]);
+  }
+  lc.current_leaf_message_uuid = lp;
+  const lf = async (url, o) => (/chat_conversations\/[0-9a-f-]{36}/.test(url) ? { ok: true, headers: { get: () => 'application/json' }, json: async () => lc } : fetchFn(url, o));
+  const runL = async (tokenBudget) => { const r = await CCE.exportChat({ fetchFn: lf, origin: 'https://claude.ai', pathname: '/chat/' + mkId(10), options: { tokenBudget } }); const zz = await CCE.unzip(r.data); const man = JSON.parse(await read(zz, (n) => n.endsWith('transfer/manifest.json'))); let ctx = ''; for (const n of zz.names.filter((x) => /transfer\/context-part-/.test(x))) ctx += new TextDecoder().decode(await zz.read(n)); return { man, ctx }; };
+  let L = await runL(1e9);
+  assert.strictEqual(L.man.level, 0, 'no shrinking without a cap'); assert(L.ctx.includes('[sources]'));
+  L = await runL(60000);
+  assert(L.man.level >= 1 && L.man.level <= 4);
+  assert(L.ctx.includes('سوال 0 ' + 'ب'.repeat(300)), 'human messages stay whole');
+  assert(L.ctx.includes('پاسخ 29 ' + 'ا'.repeat(6000)), 'recent replies stay whole');
+  L = await runL(30000);
+  assert(L.man.level >= 3 && L.man.shortened > 0, 'long older replies shortened only when needed');
+  assert(L.ctx.includes('سوال 0 ' + 'ب'.repeat(300)), 'human messages still whole at level 3');
+
   // No emoji in the output
   const md1 = await read(z, (n) => n.endsWith('/conversation.md'));
   assert(!/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(md1), 'no emoji in conversation.md');

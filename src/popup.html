@@ -26,6 +26,10 @@
   .sw input:checked + i{background:var(--acc);border-color:var(--acc)}
   .sw input:checked + i::after{background:#1b1917;transform:translateX(-14px)}
   .sw input:focus-visible + i,select:focus-visible,#go:focus-visible,#all:focus-visible,a:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+  .sw .tx{display:flex;flex-direction:column;min-width:0;padding:3px 0}
+  .sw .tx b{font-size:13px;font-weight:600;line-height:1.5} .sw .tx small{color:var(--mut);font-size:11.5px;line-height:1.6}
+  .sw.sel select{max-width:46%;flex:none}
+  h4.gh{margin:14px 0 2px;font-size:12px;font-weight:600;color:var(--mut);border-bottom:1px solid var(--line);padding-bottom:3px}
   .row{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:32px}
   select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--ctl);border-radius:6px;padding:3px 6px;min-height:28px}
   #go{width:100%;min-height:40px;margin-top:0;border:0;border-radius:6px;background:var(--fg);color:var(--bg);font:600 14px "Vazirmatn",Tahoma,sans-serif;cursor:pointer}
@@ -53,21 +57,7 @@
     <div id="st" role="status" aria-live="polite"></div>
   </section>
   <main>
-    <h2>خروجی‌ها</h2>
-    <label class="sw"><span>بسته‌ی انتقال به اکانت دیگر</span><input type="checkbox" id="transfer"><i></i></label>
-    <label class="sw"><span>مرورگر آفلاین HTML (چاپ/PDF)</span><input type="checkbox" id="viewer"><i></i></label>
-    <label class="sw"><span>فرمت Obsidian / Notion (.md)</span><input type="checkbox" id="note"><i></i></label>
-    <label class="sw"><span>درخواست «خلاصه‌ی پروژه» از Claude</span><input type="checkbox" id="aiSummary"><i></i></label>
-    <label class="sw"><span>فقط پیام‌های جدید از آخرین خروجی</span><input type="checkbox" id="incremental"><i></i></label>
-    <label class="sw"><span>شامل دستورالعمل/فایل‌های Project</span><input type="checkbox" id="project"><i></i></label>
-    <label class="sw"><span>پاک‌سازی کلید و توکن‌ها</span><input type="checkbox" id="redact"><i></i></label>
-    <div class="row"><span>سقف حجم متن انتقال</span>
-      <select id="budget"><option value="60000">۶۰ هزار توکن</option><option value="120000">۱۲۰ هزار توکن</option><option value="170000">۱۷۰ هزار توکن</option></select></div>
-
-    <h2>آرشیو کامل (conversation.md)</h2>
-    <label class="sw"><span>شامل «تفکر»</span><input type="checkbox" id="think"><i></i></label>
-    <label class="sw"><span>شامل جزئیات ابزارها</span><input type="checkbox" id="tools"><i></i></label>
-    <label class="sw"><span>همه‌ی شاخه‌های ویرایش/بازتولید</span><input type="checkbox" id="branches"><i></i></label>
+    <div id="opts"></div>
 
     <h2>پشتیبان‌گیری خودکار (چت‌های جدید/تغییرکرده)</h2>
     <div class="row"><span>تکرار</span>
@@ -78,6 +68,7 @@
     <div class="tip">ورود به اکانت جدید را هم از دکمه‌ی گرد نویاتیس در گوشه‌ی صفحه‌ی claude.ai انجام می‌دهید.</div>
   </main>
   <footer><div class="by"><span id="fmark"></span><span>ساخته‌شده توسط <span class="n" id="fname"></span></span></div><span id="flink"></span></footer>
+  <script src="options.js"></script>
   <script src="brand.js"></script>
   <script src="popup.js"></script>
 </body>

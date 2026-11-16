@@ -7,10 +7,8 @@
   let running = false;
   const BATCH = 20; // claude.ai accepts at most 20 attachments per message
 
-  const DEF = {
-    transfer: true, includeProject: true, redact: false, viewer: true, note: false, aiSummary: false, incremental: false,
-    includeThinking: true, includeToolOutput: true, allBranches: false, pjclean: true, tokenBudget: 120000,
-  };
+  const O = window.CCE_OPTS;
+  const DEF = Object.assign(O.defaults(), { pjclean: true });
   const loadOpts = async () => {
     try { const r = await ext.storage.local.get('cce'); return Object.assign({}, DEF, (r && r.cce) || {}); } catch (e) { return Object.assign({}, DEF); }
   };
@@ -53,7 +51,7 @@
   const host = document.createElement('div');
   host.style.cssText = 'all:initial;position:fixed;bottom:16px;left:16px;z-index:2147483647';
   const sh = host.attachShadow({ mode: 'open' });
-  const SW = (k, label) => `<label class="sw"><span>${label}</span><input type="checkbox" data-k="${k}"><i></i></label>`;
+  const SW = (k, label, hint) => `<label class="sw"><span class="tx"><b>${label}</b><small>${hint}</small></span><input type="checkbox" data-k="${k}"><i></i></label>`;
   const TEMPLATE = `
 <style>
   :host{all:initial}
@@ -86,7 +84,11 @@
   .btn:disabled{opacity:.55;cursor:default}
   .opts{margin:10px 0 2px;display:flex;flex-direction:column}
   .sw{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:32px;cursor:pointer}
-  .sw span{font-size:13px} .sw input{position:absolute;opacity:0;pointer-events:none}
+  .sw input{position:absolute;opacity:0;pointer-events:none}
+  .sw .tx{display:flex;flex-direction:column;min-width:0;padding:3px 0}
+  .sw .tx b{font-size:13px;font-weight:600;line-height:1.5} .sw .tx small{color:var(--mut);font-size:11.5px;line-height:1.6}
+  .sw.sel select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--ctl);border-radius:6px;padding:3px 6px;min-height:30px;max-width:44%;flex:none}
+  h4.gh{margin:14px 0 2px;font-size:11.5px;font-weight:600;color:var(--mut);border-bottom:1px solid var(--line);padding-bottom:3px}
   .sw i{width:34px;height:20px;border-radius:20px;border:1.5px solid var(--ctl);position:relative;flex:none}
   .sw i::after{content:"";position:absolute;top:2px;right:2px;width:13px;height:13px;border-radius:50%;background:var(--ctl)}
   .sw input:checked + i{background:var(--acc);border-color:var(--acc)}
@@ -129,11 +131,24 @@
   .warns{display:none;margin-top:8px;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:12px;white-space:pre-line;max-height:120px;overflow:auto}
   .sum{display:none;margin-top:10px;padding:10px 12px;border-radius:6px;background:var(--soft);font-size:13px;white-space:pre-line} .sum.err{color:var(--err)}
   .back{margin-top:10px}
+  .lbl{margin:12px 0 4px;font-size:12px;font-weight:600;color:var(--mut)}
+  .meter{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:6px 0 2px} .meter i{display:block;height:100%;background:var(--acc);border-radius:4px}
+  .meter.hot i{background:var(--err)} .mlb{font-size:12px;color:var(--mut)} .mlb b{color:var(--fg)}
+  .modes{display:flex;flex-direction:column;gap:8px;margin:6px 0 10px}
+  .mode{display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer}
+  .mode:hover{background:var(--soft)} .mode.on{border-color:var(--acc);background:var(--soft)}
+  .mode input{margin-top:6px;accent-color:var(--acc)}
+  .mode b{font-size:13px;font-weight:600} .mode small{display:block;color:var(--mut);font-size:12px;line-height:1.7}
+  .rec{display:inline-block;background:var(--acc);color:#1b1917;border-radius:4px;padding:0 6px;font-size:11px;font-weight:600;margin-inline-start:6px}
+  .bseg{display:flex;gap:4px;margin:10px 0 2px} .bseg i{flex:1;height:8px;border-radius:4px;background:var(--line)}
+  .bseg i.done{background:var(--fg)} .bseg i.act{background:var(--acc);animation:pulse 1.2s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.45}}
+  .steps2{margin:6px 0 0;padding:0 18px 0 0;font-size:12px;line-height:1.9;color:var(--mut)}
   footer{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 16px;border-top:1px solid var(--line);color:var(--mut);font-size:12px}
   footer .by{display:flex;align-items:center;gap:7px} footer a{color:var(--accT);text-decoration:underline}
   footer span.n{font-weight:600;color:var(--fg)}
   [hidden]{display:none!important}
-  @media (prefers-reduced-motion:reduce){.busy .fab .ring,.step.active .ic{animation:none}.step.active .ic{border-top-color:var(--acc)}}
+  @media (prefers-reduced-motion:reduce){.busy .fab .ring,.step.active .ic,.bseg i.act{animation:none}.step.active .ic{border-top-color:var(--acc)}}
   @media (prefers-reduced-motion:no-preference){.sw i::after{transition:transform .12s}}
 </style>
 <div class="wrap">
@@ -149,17 +164,8 @@
       <div id="v-single">
         <button class="btn primary" id="exp">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg><span>دریافت ZIP از این چت</span></button>
-        <div class="opts">
-          ${SW('transfer', 'بسته‌ی انتقال به اکانت دیگر')}
-          ${SW('viewer', 'مرورگر آفلاین HTML (قابل چاپ/PDF)')}
-          <label class="sw"><span id="incl">فقط پیام‌های جدید از آخرین خروجی</span><input type="checkbox" data-k="incremental"><i></i></label>
-        </div>
-        <details class="more"><summary>گزینه‌های بیشتر</summary><div class="opts">
-          ${SW('includeProject', 'شامل دستورالعمل و فایل‌های Project')}
-          ${SW('note', 'فرمت Obsidian / Notion (فایل .md با frontmatter)')}
-          ${SW('aiSummary', 'درخواست «خلاصه‌ی پروژه» از Claude در چت جدید')}
-          ${SW('redact', 'پاک‌سازی کلید و توکن‌ها')}
-        </div></details>
+        <div class="opts" id="o-main"></div>
+        <details class="more"><summary>گزینه‌های بیشتر</summary><div class="opts" id="o-more"></div></details>
         <div class="msg" id="msg1"></div>
       </div>
       <div id="v-bulk" hidden>
@@ -188,10 +194,24 @@
       <div id="v-import" hidden>
         <section class="pane">
           <h3>ادامه‌ی یک چت قبلی</h3>
-          <p>ZIP انتقالی که قبلاً از «این چت» گرفته‌اید. گفتگو و فایل‌هایش در چت جدید ادامه پیدا می‌کند.</p>
+          <p>ZIP انتقالی که قبلاً از «این چت» یا «همه‌ی چت‌ها» گرفته‌اید. گفتگو و فایل‌هایش در چت جدید ادامه پیدا می‌کند.</p>
           <p class="ex">مثلاً: چت اکانت قدیمی را در اکانت جدید ادامه می‌دهم.</p>
           <button class="btn secondary" id="imp">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M5 21h14"/></svg><span id="impl">انتخاب ZIP انتقال</span></button>
+          <div id="impflow" hidden>
+            <div id="chatpick" hidden>
+              <div class="lbl">این ZIP چند چت دارد. کدام را ادامه می‌دهید؟</div>
+              <input class="search" id="cpsearch" placeholder="جست‌وجو در عنوان…" hidden>
+              <div class="list" id="cplist"></div>
+            </div>
+            <div class="lbl">حجم تخمینی این چت</div>
+            <div class="meter" id="meter"><i></i></div>
+            <div class="mlb" id="mlb"></div>
+            <div class="lbl">روش ادامه</div>
+            <div class="modes" id="modes"></div>
+            <button class="btn primary" id="impgo"><span>شروع</span></button>
+          </div>
+          <div class="bseg" id="bseg" hidden></div>
           <div class="msg" id="msg3"></div>
         </section>
         <section class="pane">
@@ -200,7 +220,7 @@
           <p class="ex">مثلاً: می‌خواهم Claude پروژه‌ی <bdi dir="ltr">my-app</bdi> را ببیند.</p>
           <button class="btn secondary" id="pj">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span id="pjl">انتخاب پوشه</span></button>
-          <div class="opts">${SW('pjclean', 'حذف پوشه‌های قابل‌بازسازی (مثل node_modules)')}</div>
+          <div class="opts">${SW('pjclean', 'حذف پوشه‌های سنگین', 'مثل node_modules که دوباره ساخته می‌شوند')}</div>
           <p class="fine">بالای ۳۰ مگابایت، چند ZIP مستقل ساخته می‌شود.</p>
           <div class="msg" id="msg4"></div>
           <button class="btn secondary" id="pjdl" hidden>دانلود ZIP ساخته‌شده</button>
@@ -298,19 +318,23 @@
   sh.querySelectorAll('.tab').forEach((t) => (t.onclick = () => show(t.dataset.tab)));
   const setMsg = (id, t, err) => { const m = $(id); m.textContent = t || ''; m.className = 'msg' + (err ? ' err' : ''); };
 
-  // Options are remembered
+  // Options are remembered; the rows are built from the shared list in options.js
   (async () => {
     const o = await loadOpts();
-    sh.querySelectorAll('.sw input').forEach((i) => {
-      i.checked = !!o[i.dataset.k];
-      i.onchange = async () => { const cur = await loadOpts(); cur[i.dataset.k] = i.checked; await saveOpts(cur); };
-    });
+    const onChange = async (k, v) => { const cur = await loadOpts(); cur[k] = v; await saveOpts(cur); };
+    O.build($('#o-main'), (x) => x.main, o, onChange, false);
+    O.build($('#o-more'), (x) => !x.main, o, onChange, true);
+    const pc = sh.querySelector('[data-k=pjclean]');
+    pc.checked = !!o.pjclean;
+    pc.onchange = () => onChange('pjclean', pc.checked);
+    refreshSingle();
   })();
   async function refreshSingle() {
     const id = currentChatId();
     const st = await getState();
     const e = id && st.chats[id];
-    $('#incl').textContent = e && e.exportedAt ? `فقط پیام‌های جدید (آخرین خروجی: ${new Date(e.exportedAt).toLocaleDateString('fa-IR')})` : 'فقط پیام‌های جدید از آخرین خروجی';
+    const h = sh.querySelector('[data-hint=incremental]');
+    if (h) h.textContent = e && e.exportedAt ? `از آخرین خروجی (${new Date(e.exportedAt).toLocaleDateString('fa-IR')})` : 'از آخرین خروجی همین چت';
   }
 
   const STEPS = {};
@@ -461,7 +485,8 @@
       PP.finish(true, [
         'دانلود شد: ' + LRI(res.filename),
         `پیام‌ها ${c.messages} · فایل‌ها ${c.files} · آرتیفکت‌ها ${c.artifacts} · ساخته‌شده ${c.genFiles}`,
-        res.stats && res.stats.parts ? `بسته‌ی انتقال: ${res.stats.parts} بخش متن، حدود ${res.stats.estTokens} توکن` : '',
+        res.stats && res.stats.parts ? `بسته‌ی انتقال: ${res.stats.parts} بخش متن، حدود ${kfa(res.stats.estTokens)}` : '',
+        res.stats && res.stats.suggestProject ? 'حجم زیاد است؛ موقع ورود، «بسته‌ی Project» پیشنهاد می‌شود.' : '',
         res.meta.partial ? 'فقط پیام‌های جدید از آخرین خروجی گرفته شد.' : '',
       ].filter(Boolean));
       return { filename: res.filename, report: res.report };
@@ -674,46 +699,179 @@
       throw new Error('متن در کادر قرار نگرفت؛ در کلیپ‌بورد کپی شد، با Ctrl+V بچسبانید.');
     }
   }
-  async function loadZip(file) {
+  // ---- Import: pick a ZIP, pick the chat (if there are several), pick the way to continue ----
+  const TOKEN_LIMIT = 200000; // rough context size of a chat; used only for the meter
+  const PROJECT_FROM = 150000; // above this the Project pack is recommended
+  const fa = (n) => Math.round(n).toLocaleString('fa-IR');
+  const kfa = (n) => (n >= 1000 ? fa(n / 1000) + ' هزار' : fa(n)) + ' توکن';
+  const dec = (u8) => new TextDecoder().decode(u8);
+  // Save a File through a temporary link
+  const saveFile = (f) => { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); };
+  let imp = null; // {zip, items:[{mf, manifest}], sel, mode}
+
+  async function openZip(file) {
     setMsg('#msg3', 'در حال خواندن ZIP…');
     const zip = await CCE.unzip(await file.arrayBuffer());
-    const mf = zip.names.find((n) => /(^|\/)transfer\/manifest\.json$/.test(n));
-    if (!mf) throw new Error('این ZIP پوشه‌ی transfer ندارد (باید از «این چت» با گزینه‌ی بسته‌ی انتقال خروجی گرفته باشید).');
-    const base = mf.slice(0, mf.length - 'manifest.json'.length);
-    const manifest = JSON.parse(new TextDecoder().decode(await zip.read(mf)));
-    const files = [];
+    const mfs = zip.names.filter((n) => /(^|\/)transfer\/manifest\.json$/.test(n));
+    if (!mfs.length) throw new Error('این ZIP پوشه‌ی transfer ندارد (باید با گزینه‌ی «بسته‌ی انتقال» خروجی گرفته باشید).');
+    const items = [];
+    for (const mf of mfs) { try { items.push({ mf, manifest: JSON.parse(dec(await zip.read(mf))) }); } catch (e) { /* skip a broken manifest */ } }
+    if (!items.length) throw new Error('فایل manifest.json خوانده نشد.');
+    items.sort((a, b) => String(a.manifest.title).localeCompare(String(b.manifest.title), 'fa'));
+    imp = { zip, items, sel: 0, mode: null };
+    setMsg('#msg3', '');
+    $('#bseg').hidden = true;
+    renderImp();
+  }
+
+  const radioRow = (cls, name, checked, onPick) => {
+    const l = document.createElement('label'); l.className = cls;
+    const r = document.createElement('input'); r.type = 'radio'; r.name = name; r.checked = checked; r.onchange = onPick;
+    l.appendChild(r);
+    return [l, r];
+  };
+  function renderChats() {
+    const q = ($('#cpsearch').value || '').trim().toLowerCase();
+    const box = $('#cplist'); box.textContent = '';
+    imp.items.forEach((it, i) => {
+      if (q && !String(it.manifest.title).toLowerCase().includes(q)) return;
+      const [l] = radioRow('row', 'cp', i === imp.sel, () => { imp.sel = i; imp.mode = null; renderModes(); });
+      const d = document.createElement('div');
+      const b = document.createElement('b'); b.textContent = it.manifest.title || '—';
+      const sm = document.createElement('small'); sm.textContent = `${it.manifest.messages ? fa(it.manifest.messages) + ' پیام · ' : ''}حدود ${kfa(it.manifest.estTokens || 0)}`;
+      d.append(b, sm); l.appendChild(d); box.appendChild(l);
+    });
+  }
+  function renderModes() {
+    const m = imp.items[imp.sel].manifest, est = m.estTokens || 0, big = est > PROJECT_FROM;
+    if (!imp.mode) imp.mode = big ? 'project' : 'chat';
+    const bd = m.breakdown;
+    $('#meter').className = 'meter' + (est > TOKEN_LIMIT * 0.75 ? ' hot' : '');
+    $('#meter').firstChild.style.width = Math.min(100, Math.round((est / TOKEN_LIMIT) * 100)) + '%';
+    rich($('#mlb'), [{ b: kfa(est) }, ` از حدود ${kfa(TOKEN_LIMIT)} ظرفیت یک چت`, bd ? ` (متن ${kfa(bd.text)}${bd.images ? ' · عکس‌ها ' + kfa(bd.images) : ''}${bd.files ? ' · فایل‌ها ' + kfa(bd.files) : ''})` : '']);
+    const box = $('#modes'); box.textContent = '';
+    const defs = [
+      ['chat', 'ادامه در چت جدید', 'ساده‌ترین راه. فایل‌ها همین‌جا پیوست می‌شوند و بخشی از ظرفیت چت را پر می‌کنند.', !big],
+      ['project', 'بسته‌ی Project', 'برای چت‌های بزرگ. فایل‌ها به Knowledge یک Project می‌روند و خود چت خالی می‌ماند.', big],
+    ];
+    for (const [v, t, d, rec] of defs) {
+      const [l] = radioRow('mode' + (imp.mode === v ? ' on' : ''), 'md', imp.mode === v, () => { imp.mode = v; renderModes(); });
+      const w = document.createElement('div');
+      const b = document.createElement('b'); b.textContent = t;
+      if (rec) { const r = document.createElement('span'); r.className = 'rec'; r.textContent = 'پیشنهادی'; b.appendChild(r); }
+      const sm = document.createElement('small'); sm.textContent = d;
+      w.append(b, sm); l.appendChild(w); box.appendChild(l);
+    }
+  }
+  function renderImp() {
+    $('#impflow').hidden = false;
+    const many = imp.items.length > 1;
+    $('#chatpick').hidden = !many;
+    $('#cpsearch').hidden = imp.items.length < 8;
+    if (many) renderChats();
+    renderModes();
+  }
+  $('#cpsearch').oninput = renderChats;
+
+  // Chat mode: attach in batches of 20; project mode: build one ZIP for the Project's Knowledge
+  const itemPaths = (it) => { const base = it.mf.slice(0, -'manifest.json'.length); return { base, root: base.slice(0, -'transfer/'.length) }; };
+  const readAttach = (it, a) => { const { base, root } = itemPaths(it); return imp.zip.read(a.ref ? root + a.ref : base + a.path); };
+
+  async function prepareChat(it) {
+    const manifest = it.manifest, files = [];
+    let k = 0;
     for (const a of manifest.attach || []) {
-      const bytes = await zip.read(base + a.path);
-      files.push(new File([bytes], a.name, { type: a.mime || CCE.mimeFromName(a.name) }));
+      setMsg('#msg3', `در حال خواندن فایل‌ها… ${fa(++k)} از ${fa((manifest.attach || []).length)}`);
+      files.push(new File([await readAttach(it, a)], a.name, { type: a.mime || CCE.mimeFromName(a.name) }));
     }
     const batches = [];
     for (let i = 0; i < files.length; i += BATCH) batches.push(files.slice(i, i + BATCH));
     if (!batches.length) batches.push([]);
     pending = { manifest, batches, i: 0 };
+    $('#impflow').hidden = true;
   }
+  const renderSeg = (done, k, active) => {
+    const box = $('#bseg'); box.textContent = '';
+    for (let i = 0; i < k; i++) { const s = document.createElement('i'); s.className = i < done ? 'done' : i === active ? 'act' : ''; box.appendChild(s); }
+    box.hidden = k < 2;
+  };
   async function attachNextBatch() {
     if (!pending) return;
     if (!findComposer()) throw new Error('اول یک چت جدید باز کنید (claude.ai/new).');
     const { manifest, batches } = pending;
     const k = batches.length, i = pending.i;
     const isLast = i === k - 1;
-    setMsg('#msg3', `در حال پیوست دسته ${i + 1} از ${k}…`);
+    renderSeg(i, k, i);
+    setMsg('#msg3', `در حال پیوست دسته ${fa(i + 1)} از ${fa(k)}…`);
     await attachFiles(batches[i]);
     let text;
     if (k === 1) text = manifest.prompt;
-    else if (!isLast) text = `[Transfer batch ${i + 1} of ${k} — files only. Do not analyze yet; just reply "received".]`;
-    else text = `[Transfer batch ${k} of ${k} — final batch. The files from the previous ${k - 1} message(s) belong to this transfer as well.]\n\n` + manifest.prompt;
+    else if (!isLast) {
+      text = `[Transfer batch ${i + 1} of ${k} — FILES ONLY]\n`
+        + `This message only carries files. Do not read or analyze them yet and do not summarize; reply with the single word "received". My main message and my actual request come with the LAST batch (${k} of ${k}).\n\n`
+        + `[دسته‌ی ${fa(i + 1)} از ${fa(k)} — فقط فایل]\nاین پیام فقط فایل دارد. هنوز تحلیل نکن و خلاصه نکن؛ فقط بنویس «received». متن اصلی و درخواست من در دسته‌ی آخر (${fa(k)} از ${fa(k)}) است.`;
+    } else {
+      text = `[Transfer batch ${k} of ${k} — FINAL]\n`
+        + `This is the last batch. The files from the previous ${k - 1} message(s) belong to this same transfer. Read everything together and continue as described below.\n\n`
+        + `[دسته‌ی ${fa(k)} از ${fa(k)} — آخر]\nاین آخرین دسته است. فایل‌های ${fa(k - 1)} پیام قبلی هم جزو همین انتقال‌اند. همه را با هم بخوان و طبق متن زیر ادامه بده.\n\n`
+        + manifest.prompt;
+    }
     await insertText(text);
     pending.i++;
     if (pending.i >= k) {
       pending = null;
-      setMsg('#msg3', `${batches[i].length} فایل پیوست شد و متن آماده است.\nدکمه‌ی Send را بزنید.`);
+      renderSeg(k, k, -1);
+      setMsg('#msg3', `${fa(batches[i].length)} فایل پیوست شد و متن آماده است.\nدکمه‌ی Send را بزنید.`);
       $('#impl').textContent = 'انتخاب ZIP انتقال';
     } else {
-      setMsg('#msg3', `دسته‌ی ${i + 1} از ${k} آماده است.\nSend را بزنید، بعد دوباره دکمه‌ی بالا را بزنید.`);
-      $('#impl').textContent = `دسته بعدی (${pending.i + 1} از ${k})`;
+      renderSeg(i + 1, k, -1);
+      setMsg('#msg3', `دسته‌ی ${fa(i + 1)} از ${fa(k)} آماده است.\nSend را بزنید، صبر کنید جواب بیاید، بعد دوباره دکمه‌ی بالا را بزنید.`);
+      $('#impl').textContent = `دسته‌ی بعدی (${fa(pending.i + 1)} از ${fa(k)})`;
     }
   }
+
+  const PROJECT_README = [
+    'مراحل (Steps):',
+    '1) این ZIP را از حالت فشرده خارج کنید. / Unzip this pack.',
+    '2) در claude.ai یک Project جدید بسازید. / Create a new Project.',
+    '3) همه‌ی فایل‌های پوشه‌ی knowledge را در بخش Knowledge بکشید. / Drag everything in knowledge/ into the Project knowledge.',
+    '4) اگر فایل 2-INSTRUCTIONS.md هست، محتوایش را در Instructions پروژه بگذارید. / If 2-INSTRUCTIONS.md exists, paste it into the Project instructions.',
+    '5) داخل همان Project یک چت جدید باز کنید و متن 3-FIRST-MESSAGE.md را بفرستید. / Open a new chat inside the Project and send 3-FIRST-MESSAGE.md.',
+  ].join('\n');
+  async function prepareProject(it) {
+    const m = it.manifest, { root } = itemPaths(it);
+    const z = CCE.makeZip();
+    let k = 0;
+    for (const a of m.attach || []) {
+      setMsg('#msg3', `در حال آماده‌سازی… ${fa(++k)} از ${fa((m.attach || []).length)}`);
+      z.file('knowledge/' + a.name, await readAttach(it, a));
+    }
+    const ins = imp.zip.names.find((n) => n === root + 'project/instructions.md');
+    if (ins) z.file('2-INSTRUCTIONS.md', await imp.zip.read(ins));
+    const first = m.projectPrompt || m.prompt;
+    z.file('3-FIRST-MESSAGE.md', first);
+    z.file('0-README.txt', PROJECT_README);
+    const data = await z.generate();
+    const name = (CCE.sanitize ? CCE.sanitize(m.title || 'chat', 40) : 'chat') + '-project-pack.zip';
+    saveFile(new File([data], name, { type: 'application/zip' }));
+    let copied = false;
+    // The clipboard can be refused or hang when the page is not focused; the text is also in 3-FIRST-MESSAGE.md
+    try { await Promise.race([navigator.clipboard.writeText(first).then(() => { copied = true; }), sleep(1500)]); } catch (e) { /* not copied */ }
+    $('#impflow').hidden = true;
+    setMsg('#msg3', [
+      `بسته‌ی Project دانلود شد: ${LRI(name)} (${fmtMB(data.length)})`,
+      '۱) ZIP را باز کنید و یک Project جدید بسازید.',
+      `۲) فایل‌های پوشه‌ی knowledge را در Knowledge بکشید${ins ? ' و 2-INSTRUCTIONS.md را در Instructions بگذارید' : ''}.`,
+      copied ? '۳) در یک چت داخل Project، با Ctrl+V پیام اول را بفرستید (کپی شده است).' : '۳) در یک چت داخل Project، متن فایل 3-FIRST-MESSAGE.md را بفرستید.',
+    ].join('\n'));
+  }
+  $('#impgo').onclick = async () => {
+    try {
+      const it = imp.items[imp.sel];
+      if (imp.mode === 'project') await prepareProject(it);
+      else { await prepareChat(it); await attachNextBatch(); }
+    } catch (e) { setMsg('#msg3', e.message, true); }
+  };
   const picker = document.createElement('input');
   picker.type = 'file'; picker.accept = '.zip,application/zip'; picker.style.display = 'none';
   sh.appendChild(picker);
@@ -724,7 +882,7 @@
     const f = picker.files && picker.files[0];
     picker.value = '';
     if (!f) return;
-    try { await loadZip(f); await attachNextBatch(); } catch (e) { setMsg('#msg3', e.message, true); }
+    try { await openZip(f); } catch (e) { setMsg('#msg3', e.message, true); }
   };
 
   // ---- Zip a project folder ----
@@ -788,7 +946,7 @@
       const r = await zipFolder(files);
       const total = r.out.reduce((a, p) => a + p.data.length, 0);
       const outFiles = r.out.map((p, i) => new File([p.data], r.out.length > 1 ? `${r.name}-part${i + 1}.zip` : `${r.name}.zip`, { type: 'application/zip' }));
-      const download = () => outFiles.forEach((f) => { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000); });
+      const download = () => outFiles.forEach(saveFile);
       const dl = $('#pjdl'); dl.hidden = false; dl.onclick = download;
       let where;
       if (findComposer()) {
