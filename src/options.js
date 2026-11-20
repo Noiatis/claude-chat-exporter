@@ -71,4 +71,4 @@
   const api = { OPTS, GROUPS, defaults, build };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CCE_OPTS = api;
-})(typeof window !== 'undefined' ? window : globalThis);
+})(typeof globalThis !== 'undefined' ? globalThis : this);

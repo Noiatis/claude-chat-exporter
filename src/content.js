@@ -6,13 +6,13 @@
   if (prev && prev.alive && prev.alive()) return;
   if (prev && prev.host) { try { prev.host.remove(); } catch (e) {} }
   const me = window.__cceLoaded = { host: null, alive: () => { try { return !!(ext.runtime && ext.runtime.id); } catch (e) { return false; } } };
-  const B = window.CCE_BRAND;
-  const I = window.CCE_I18N;
+  const B = globalThis.CCE_BRAND;
+  const I = globalThis.CCE_I18N;
   const t = (k, p) => I.t(k, p);
   let running = false;
   const BATCH = 20; // claude.ai accepts at most 20 attachments per message
 
-  const O = window.CCE_OPTS;
+  const O = globalThis.CCE_OPTS;
   const DEF = Object.assign(O.defaults(), { pjclean: true, lang: 'fa' });
   const loadOpts = async () => {
     try { const r = await ext.storage.local.get('cce'); return Object.assign({}, DEF, (r && r.cce) || {}); } catch (e) { return Object.assign({}, DEF); }
