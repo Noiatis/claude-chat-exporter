@@ -1,8 +1,11 @@
 (() => {
-  // The popup may inject the script again; one copy is enough
-  if (window.__cceLoaded) return;
-  window.__cceLoaded = true;
   const ext = typeof browser !== 'undefined' ? browser : chrome;
+  // The popup may inject the script again; one live copy is enough. A copy left by an older version
+  // of the extension is dead (its runtime is gone) and still sets the flag, so it must not block this one.
+  const prev = window.__cceLoaded;
+  if (prev && prev.alive && prev.alive()) return;
+  if (prev && prev.host) { try { prev.host.remove(); } catch (e) {} }
+  const me = window.__cceLoaded = { host: null, alive: () => { try { return !!(ext.runtime && ext.runtime.id); } catch (e) { return false; } } };
   const B = window.CCE_BRAND;
   const I = window.CCE_I18N;
   const t = (k, p) => I.t(k, p);
@@ -51,6 +54,7 @@
 
   // The panel lives in a Shadow DOM so claude.ai CSS does not leak in and vice versa
   const host = document.createElement('div');
+  me.host = host;
   host.style.cssText = 'all:initial;position:fixed;bottom:16px;left:16px;z-index:2147483647';
   const sh = host.attachShadow({ mode: 'open' });
   const SW = (k, label, hint) => `<label class="sw"><span class="tx"><b data-t="${label}"></b><small data-t="${hint}"></small></span><input type="checkbox" data-k="${k}"><i></i></label>`;

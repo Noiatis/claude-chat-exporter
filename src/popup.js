@@ -70,15 +70,29 @@ ext.runtime.onMessage.addListener((m) => {
   if (i.total && !i.bulk) bar.style.width = Math.round(((i.current || 0) / i.total) * 100) + '%';
 });
 
-// If a claude.ai tab was opened before the extension was installed or updated, it has no content script.
-// Inject it here so the user does not have to reload the page.
+// If a claude.ai tab was opened before the extension was installed or updated, it has no live content script.
+// Inject it here so the user does not have to reload the page. If that still fails, ask for a reload
+// instead of showing the browser's raw "Receiving end does not exist" error.
+const GONE = /Receiving end does not exist|Could not establish connection|context invalidated|Cannot access|Missing host permission/i;
+async function send(tab, msg) {
+  try {
+    return await ext.tabs.sendMessage(tab.id, msg);
+  } catch (e) {
+    throw new Error(GONE.test((e && e.message) || '') ? t('pop.reload') : (e && e.message) || String(e));
+  }
+}
 async function claudeTab() {
   const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
   if (!tab || !/^https:\/\/claude\.ai\//.test(tab.url || '')) throw new Error(t('pop.notab'));
   try {
     await ext.tabs.sendMessage(tab.id, { type: 'ping' });
   } catch (e) {
-    await ext.scripting.executeScript({ target: { tabId: tab.id }, files: ['render.js', 'core.js', 'options.js', 'brand.js', 'content.js'] });
+    try {
+      await ext.scripting.executeScript({ target: { tabId: tab.id }, files: ['render.js', 'core.js', 'options.js', 'brand.js', 'content.js'] });
+    } catch (e2) {
+      throw new Error(t('pop.reload'));
+    }
+    await send(tab, { type: 'ping' });
   }
   return tab;
 }
@@ -86,7 +100,7 @@ async function claudeTab() {
 $('all').onclick = async () => {
   try {
     const tab = await claudeTab();
-    await ext.tabs.sendMessage(tab.id, { type: 'open-panel', tab: 'bulk' });
+    await send(tab, { type: 'open-panel', tab: 'bulk' });
     window.close();
   } catch (e) {
     say(e.message, true);
@@ -101,7 +115,7 @@ go.onclick = async () => {
     const tab = await claudeTab();
     const options = readOpts();
     await saveAll();
-    const r = await ext.tabs.sendMessage(tab.id, { type: 'export', options });
+    const r = await send(tab, { type: 'export', options });
     if (!r) throw new Error(t('pop.reload'));
     if (!r.ok) throw new Error(r.error === 'NOT_A_CHAT' ? t('not.chat') : r.error);
     bar.style.width = '100%';
