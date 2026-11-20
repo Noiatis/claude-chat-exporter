@@ -1,6 +1,6 @@
 const ext = typeof browser !== 'undefined' ? browser : chrome;
-const B = window.CCE_BRAND;
-const I = window.CCE_I18N;
+const B = globalThis.CCE_BRAND;
+const I = globalThis.CCE_I18N;
 const t = (k, v) => I.t(k, v);
 const $ = (i) => document.getElementById(i);
 const st = $('st'), go = $('go'), bar = $('bar'), trk = $('trk');
@@ -10,7 +10,7 @@ $('hmark').replaceWith(B.mark(36));
 $('fmark').replaceWith(B.mark(18));
 $('flink').appendChild(B.link('noiatis.ir'));
 
-const O = window.CCE_OPTS;
+const O = globalThis.CCE_OPTS;
 const DEF = O.defaults();
 let vals = Object.assign({}, DEF);
 let lastInfo = null;

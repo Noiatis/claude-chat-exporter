@@ -254,6 +254,12 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
   assert(vFa.includes('<html lang="fa" dir="rtl">') && vFa.includes('آخرین تغییر'));
   assert(CCE.PHASES[0][1] === 'خواندن اطلاعات حساب');
 
+  // Firefox content scripts: `window` and `globalThis` are different objects there (Xray wrapper vs sandbox),
+  // so shared objects must be written and read through globalThis only. Chrome hides the difference.
+  for (const f of fs.readdirSync(path.join(__dirname, '../src')).filter((n) => n.endsWith('.js'))) {
+    assert(!/window\.CCE_/.test(srcOf(f)), f + ': use globalThis.CCE_*, not window.CCE_* (breaks in Firefox)');
+  }
+
   // No emoji in the output
   const md1 = await read(z, (n) => n.endsWith('/conversation.md'));
   assert(!/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(md1), 'no emoji in conversation.md');
