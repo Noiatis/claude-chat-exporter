@@ -764,7 +764,7 @@
 
   async function openZip(file) {
     setMsg('#msg3', t('imp.reading'));
-    const zip = await CCE.unzip(await file.arrayBuffer());
+    const zip = await CCE.unzip(CCE.ownBytes(await file.arrayBuffer()));
     const mfs = zip.names.filter((n) => /(^|\/)transfer\/manifest\.json$/.test(n));
     if (!mfs.length) throw new Error(t('imp.no.transfer'));
     const items = [];
@@ -977,7 +977,7 @@
     const list = [];
     for (let i = 0; i < picked.length; i++) {
       if (i % 25 === 0) { setMsg('#msg4', t('pj.reading', { i, n: picked.length })); await sleep(0); }
-      list.push({ path: picked[i].path, bytes: new Uint8Array(await picked[i].file.arrayBuffer()) });
+      list.push({ path: picked[i].path, bytes: new Uint8Array(CCE.ownBytes(await picked[i].file.arrayBuffer())) });
     }
     setMsg('#msg4', t('pj.zipping'));
     const out = await packParts(list);

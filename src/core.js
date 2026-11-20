@@ -153,6 +153,9 @@
     if (/^(docx|xlsx|pptx)$/.test(ext)) return Math.min(60000, Math.ceil(u8.length / 15));
     return 0;
   }
+  // In Firefox, bytes from a page-owned Response live in another compartment and typed-array methods on them
+  // fail with "Permission denied to access property constructor". Copy them into this script's own memory first.
+  const ownBytes = (ab) => { const src = new Uint8Array(ab); const out = new Uint8Array(src.length); out.set(src); return out.buffer; };
   const isMediaName = (n) => /\.(mp3|wav|m4a|aac|ogg|oga|flac|opus|mp4|mov|webm|mkv|avi|m4v)$/i.test(n);
   const isImageName = (n) => /\.(png|jpe?g|gif|webp)$/i.test(n);
 
@@ -161,11 +164,12 @@
   const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
   function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
 
+  // Firefox content scripts: the stream classes belong to the page, and they reject typed arrays created by this script
+  // ("Value could not be converted to any of: ArrayBufferView, ArrayBuffer"). Feeding them through a Blob keeps everything
+  // on the page side, and the result is copied back into this script's memory.
   async function pipeThrough(u8, stream) {
-    const w = stream.writable.getWriter();
-    w.write(u8).catch(() => {});
-    w.close().catch(() => {});
-    return new Uint8Array(await new Response(stream.readable).arrayBuffer());
+    const out = await new Response(new Blob([u8]).stream().pipeThrough(stream)).arrayBuffer();
+    return new Uint8Array(ownBytes(out));
   }
   const deflateRaw = (u8) => pipeThrough(u8, new CompressionStream('deflate-raw'));
   const inflateRaw = (u8) => pipeThrough(u8, new DecompressionStream('deflate-raw'));
@@ -489,7 +493,7 @@
           if (!r.ok) continue;
           const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
           if (/text\/html/i.test(ct) && !/\.html?$/i.test(name)) continue;
-          const buf = await r.arrayBuffer();
+          const buf = ownBytes(await r.arrayBuffer());
           let fname = name;
           if (!/\.[A-Za-z0-9]{1,5}$/.test(fname)) { const e = extFromMime(ct); if (e) fname += '.' + e; }
           // claude.ai sometimes serves an uploaded image as WebP while the name says .png; make the extension match the real content
@@ -646,7 +650,7 @@
           if (!r.ok) continue;
           const ct = (r.headers && r.headers.get && r.headers.get('content-type')) || '';
           if (/application\/json|text\/html/i.test(ct) && !/\.(json|html?)$/i.test(base)) continue;
-          const buf = await r.arrayBuffer();
+          const buf = ownBytes(await r.arrayBuffer());
           if (buf.byteLength > opt.maxFileBytes) { missing.push({ name: base, reason: 'larger than 30MB' }); ok = true; break; }
           const path = uniq('outputs/' + sanitize(base, 120));
           put(path, buf);
@@ -1046,7 +1050,7 @@
   }
 
   const PHASE_KEYS = ['account', 'fetch', 'project', 'messages', 'transfer', 'hash', 'zip'];
-  const api = { get PHASES() { return PHASE_KEYS.map((k) => [k, T('phase.' + k)]); }, makeZip, listChats, exportMany, exportChat, unzip, sanitize, artifactExt, mimeFromName, redactText, redactPII, estTok, imageDims, isTextName };
+  const api = { get PHASES() { return PHASE_KEYS.map((k) => [k, T('phase.' + k)]); }, makeZip, listChats, exportMany, exportChat, unzip, ownBytes, sanitize, artifactExt, mimeFromName, redactText, redactPII, estTok, imageDims, isTextName };
   root.CCE = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

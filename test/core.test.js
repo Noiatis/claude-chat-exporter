@@ -260,6 +260,11 @@ const read = async (z, pred) => new TextDecoder().decode(await z.read(z.names.fi
     assert(!/window\.CCE_/.test(srcOf(f)), f + ': use globalThis.CCE_*, not window.CCE_* (breaks in Firefox)');
   }
 
+  // Bytes from page-owned objects are copied into the script's own memory (Firefox); the copy must be independent and equal
+  const srcAb = new Uint8Array([1, 2, 3, 250]).buffer;
+  const cp = CCE.ownBytes(srcAb);
+  assert(cp instanceof ArrayBuffer && cp !== srcAb && new Uint8Array(cp).join() === '1,2,3,250', 'ownBytes copies the bytes');
+
   // No emoji in the output
   const md1 = await read(z, (n) => n.endsWith('/conversation.md'));
   assert(!/[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/u.test(md1), 'no emoji in conversation.md');
